@@ -13,7 +13,7 @@ def get_llm() -> Llama:
         repo_id="Omartificial-Intelligence-Space/ALLaM-7B-Instruct-preview-Q4_K_M-GGUF",
         filename="*q4_k_m.gguf",
         n_ctx=4096,
-        n_gpu_layers=-1,  # If CUDA is available, use GPU; otherwise CPU
+        n_gpu_layers=0,  # If CUDA is available, use GPU; otherwise CPU
         verbose=False,
     )
     return llm
