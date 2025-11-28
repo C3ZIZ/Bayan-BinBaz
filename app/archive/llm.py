@@ -1,32 +1,19 @@
 from functools import lru_cache
 from typing import List, Dict, Any
-import threading
 
 from llama_cpp import Llama
 
-# إعدادات أخف للـ Space
-MAX_ANSWER_CHARS = 800       # أقصى طول مقتطف الفتوى
-MAX_HITS_FOR_PROMPT = 3      # عدد الفتاوى في وضع approx
-MAX_TOKENS = 384             # عدد التوكينات اللي نطلبها من النموذج
-
-_LLM_LOCK = threading.Lock()
-
-
+# This version can be used LOCALLY HuggingFace cant manage it well.
 @lru_cache(maxsize=1)
 def get_llm() -> Llama:
     """
-    تحميل ALLaM-7B-… كـ GGUF عبر llama-cpp.
-    إعدادات خفيفة تناسب CPU Basic قدر الإمكان.
+    Load ALLaM-7B-Instruct (GGUF) via llama-cpp-python.
     """
     llm = Llama.from_pretrained(
         repo_id="Omartificial-Intelligence-Space/ALLaM-7B-Instruct-preview-Q4_K_M-GGUF",
         filename="*q4_k_m.gguf",
-        n_ctx=2048,        # خفّضنا الكونتكست عشان الرام
-        n_gpu_layers=0,    # في Space ما فيه GPU
-        n_batch=64,
-        n_threads=4,       # يقدر يتحكم فيها الـ Runtime
-        use_mmap=True,
-        use_mlock=False,
+        n_ctx=4096,
+        n_gpu_layers=0,  # If CUDA is available, use GPU; otherwise CPU
         verbose=False,
     )
     return llm
@@ -43,29 +30,17 @@ SYSTEM_PROMPT = """
 """.strip()
 
 
-def _truncate(text: str, max_chars: int = MAX_ANSWER_CHARS) -> str:
-    if not text:
-        return ""
-    text = text.strip()
-    if len(text) <= max_chars:
-        return text
-    return text[:max_chars] + "..."
-
-
 def build_exact_prompt(user_question: str, hit: Dict[str, Any]) -> str:
-    q = (hit.get("question") or "").strip()
-    a = _truncate(hit.get("answer") or "")
-
     return f"""
 السؤال من المستخدم:
 {user_question}
 
 أقرب سؤال مطابق في قاعدة بيانات الشيخ ابن باز:
 السؤال:
-{q}
+{hit.get("question", "").strip()}
 
-الجواب (مقتطف من الفتوى):
-{a}
+الجواب:
+{hit.get("answer", "").strip()}
 
 المطلوب:
 - أعد عرض الجواب للمستخدم بلغة واضحة ومبسطة مع الحفاظ على نفس الحكم الشرعي.
@@ -77,26 +52,20 @@ def build_exact_prompt(user_question: str, hit: Dict[str, Any]) -> str:
 
 
 def build_approx_prompt(user_question: str, hits: List[Dict[str, Any]]) -> str:
-    hits = hits[:MAX_HITS_FOR_PROMPT]
-
-    parts = []
+    context_parts = []
     for i, h in enumerate(hits, start=1):
-        q = (h.get("question") or "").strip()
-        a = _truncate(h.get("answer") or "")
-        parts.append(
-            f"""فتوى رقم {i}:
-السؤال: {q}
-الجواب (مقتطف): {a}
+        part = f"""فتوى رقم {i}:
+السؤال: {h.get("question", "").strip()}
+الجواب: {h.get("answer", "").strip()}
 """
-        )
-
-    context_text = "\n\n".join(parts)
+        context_parts.append(part)
+    context_text = "\n\n".join(context_parts)
 
     return f"""
 السؤال من المستخدم (لا يوجد له تطابق تام في القاعدة):
 {user_question}
 
-فيما يلي مقتطفات من فتاوى قريبة للشيخ ابن باز:
+فيما يلي مجموعة فتاوى قريبة في الموضوع للشيخ ابن باز:
 
 {context_text}
 
@@ -117,14 +86,13 @@ def generate_answer(
     llm = get_llm()
 
     if not hits:
+        # ما فيه سياق نهائيًا
         user_prompt = f"""
 السؤال:
 {user_question}
 
 لم أجد أي فتوى مرتبطة بهذا السؤال في قاعدة بيانات الشيخ ابن باز.
-رجاءً:
-- قدّم توجيهًا عامًا جدًا إن كان في قدرتك، بدون إصدار حكم تفصيلي.
-- اذكر بوضوح أن هذه ليست فتوى عن الشيخ ابن باز، وأن على السائل أن يسأل أهل العلم مباشرة.
+رجاءً اجِب بإرشاد عام، واذكر بوضوح أن المستخدم يجب أن يسأل أهل العلم مباشرة.
         """.strip()
     else:
         if exact:
@@ -132,15 +100,13 @@ def generate_answer(
         else:
             user_prompt = build_approx_prompt(user_question, hits)
 
-    with _LLM_LOCK:
-        result = llm.create_chat_completion(
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.1,
-            max_tokens=MAX_TOKENS,
-        )
-
+    result = llm.create_chat_completion(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0.1,
+        max_tokens=768,
+    )
     answer = result["choices"][0]["message"]["content"]
     return answer.strip()
