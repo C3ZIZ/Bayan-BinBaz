@@ -1,39 +1,30 @@
-name: Sync with Hugging Face Hub
+name: Sync to Hugging Face hub
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  sync-with-hf:
+  sync-to-hub:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
-
-      - name: Sync to Hugging Face Hub
-        uses: nateraw/huggingface-sync-action@v0.0.5
         with:
-          # مستودع GitHub: username/repo
-          github_repo_id: "C3ZIZ/Bayan-BinBaz"
+          fetch-depth: 0   # عشان الهيستوري كامل
+          lfs: true        # لو احتجت Git LFS لاحقًا
 
-          # مستودع Hugging Face: hf_username/repo
-          huggingface_repo_id: "CIAZIZ/Bayan-BinBaz"
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # نظف remote قديم لو موجود
+          git remote remove space || true
 
-          # نوع الريبو في HF: model | dataset | space
-          # لو خليته Space:
-          #   repo_type: "space"
-          #   space_sdk: "gradio" (أو "docker" أو "streamlit")
-          repo_type: "space"
-          space_sdk: "gradio"
+          # أضف remote للـ Space
+          git remote add space https://CIAZIZ:$HF_TOKEN@huggingface.co/spaces/CIAZIZ/Bayan-BinBaz
 
-          # استخدم الـ token من secrets
-          hf_token: ${{ secrets.HF_TOKEN }}
-          # Visibility is left unset so the action doesn't pass a string
-          # (the HF API expects a boolean; passing a string caused a BadRequest)
-
-          # subdirectory: تقدر تخليها فاضية عشان يـsync كل الريبو
-          subdirectory: ""
+          # ادفع فرع main إلى الـ Space
+          git push --force space main
