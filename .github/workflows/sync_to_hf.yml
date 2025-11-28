@@ -1,0 +1,40 @@
+name: Sync with Hugging Face Hub
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  sync-with-hf:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sync to Hugging Face Hub
+        uses: nateraw/huggingface-sync-action@v0.0.5
+        with:
+          # مستودع GitHub: username/repo
+          github_repo_id: "C3ZIZ/Bayan-BinBaz"
+
+          # مستودع Hugging Face: hf_username/repo
+          huggingface_repo_id: "CIAZIZ/Bayan-BinBaz"
+
+          # نوع الريبو في HF: model | dataset | space
+          # لو خليته Space:
+          #   repo_type: "space"
+          #   space_sdk: "gradio" (أو "docker" أو "streamlit")
+          repo_type: "space"
+          space_sdk: "gradio"
+
+          # استخدم الـ token من secrets
+          hf_token: ${{ secrets.HF_TOKEN }}
+
+          # خله Public
+          private: false
+
+          # subdirectory: تقدر تخليها فاضية عشان يـsync كل الريبو
+          subdirectory: ""
