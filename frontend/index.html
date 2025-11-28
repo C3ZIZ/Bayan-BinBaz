@@ -1,181 +1,699 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <title>مساعد فتاوى ابن باز</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body {
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-      background: #f5f5f5;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      height: 100vh;
-      justify-content: center;
-      align-items: center;
-    }
-    .chat-container {
-      width: 100%;
-      max-width: 700px;
-      height: 90vh;
-      background: #ffffff;
-      border-radius: 16px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .chat-header {
-      padding: 16px 20px;
-      border-bottom: 1px solid #eee;
-      background: #0f172a;
-      color: #f9fafb;
-      font-weight: 600;
-      font-size: 16px;
-    }
-    .chat-messages {
-      flex: 1;
-      padding: 16px;
-      overflow-y: auto;
-      background: #f9fafb;
-    }
-    .message {
-      margin-bottom: 12px;
-      max-width: 90%;
-      line-height: 1.6;
-      font-size: 14px;
-      white-space: pre-wrap;
-    }
-    .message.user {
-      margin-left: auto;
-      background: #2563eb;
-      color: white;
-      border-radius: 12px 12px 0 12px;
-      padding: 8px 10px;
-    }
-    .message.bot {
-      margin-right: auto;
-      background: #e5e7eb;
-      color: #111827;
-      border-radius: 12px 12px 12px 0;
-      padding: 8px 10px;
-    }
-    .chat-input {
-      display: flex;
-      border-top: 1px solid #eee;
-      padding: 10px;
-      gap: 8px;
-      background: white;
-    }
-    .chat-input textarea {
-      flex: 1;
-      resize: none;
-      border-radius: 10px;
-      border: 1px solid #d1d5db;
-      padding: 8px 10px;
-      font-family: inherit;
-      font-size: 14px;
-    }
-    .chat-input button {
-      padding: 0 16px;
-      border: none;
-      border-radius: 10px;
-      background: #0f172a;
-      color: #f9fafb;
-      font-size: 14px;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .chat-input button:disabled {
-      opacity: 0.6;
-      cursor: default;
-    }
-  </style>
-</head>
-<body>
-  <div class="chat-container">
-    <div class="chat-header">
-      مساعد فتاوى ابن باز
-    </div>
-    <div id="chatMessages" class="chat-messages"></div>
-    <form id="chatForm" class="chat-input">
-      <textarea id="questionInput" rows="2" placeholder="اكتب سؤالك الشرعي هنا..." required></textarea>
-      <button type="submit">إرسال</button>
-    </form>
-  </div>
+  <head>
+    <meta charset="UTF-8" />
+    <title>بيان – مساعد فتاوى ابن باز</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <script>
-    const API_URL = "http://127.0.0.1:8000/api/chat"; // غيّرها لو نشرت على سيرفر
+    <!-- Tajawal font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
 
-    const chatMessages = document.getElementById("chatMessages");
-    const chatForm = document.getElementById("chatForm");
-    const questionInput = document.getElementById("questionInput");
-    const submitButton = chatForm.querySelector("button");
+    <style>
+      :root {
+        --color-beige: #f5ede3;
+        --color-gold: #d7a562;
+        --color-black: #00080b;
 
-    function addMessage(text, sender) {
-      const div = document.createElement("div");
-      div.className = "message " + sender;
-      div.textContent = text;
-      chatMessages.appendChild(div);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
+        --color-beige-soft: #faf3ea;
+        --color-gold-soft: #e5bd7e;
+        --color-black-soft: #1a1e22;
 
-    chatForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const question = questionInput.value.trim();
-      if (!question) return;
-
-      addMessage(question, "user");
-      questionInput.value = "";
-      submitButton.disabled = true;
-      addMessage("جارٍ جلب الفتوى...", "bot");
-
-      try {
-        const resp = await fetch(API_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            question: question,
-            top_k: 5
-          })
-        });
-
-        if (!resp.ok) {
-          throw new Error("HTTP " + resp.status);
-        }
-
-        const data = await resp.json();
-        // امسح رسالة "جارٍ جلب الفتوى..."
-        chatMessages.removeChild(chatMessages.lastChild);
-
-        let finalText = data.answer;
-
-        // أضف الروابط إن وجدت
-        if (data.fatwa_link) {
-          finalText += "\n\nرابط الفتوى المطابقة:\n" + data.fatwa_link;
-        } else if (data.related_fatwas && data.related_fatwas.length > 0) {
-          finalText += "\n\nأقرب الفتاوى من ابن باز:\n";
-          data.related_fatwas.forEach((f, idx) => {
-            if (f.link) {
-              finalText += `\n${idx + 1}. ${f.title || f.question}\n${f.link}\n`;
-            }
-          });
-        }
-
-        addMessage(finalText, "bot");
-      } catch (err) {
-        // امسح رسالة "جارٍ جلب الفتوى..."
-        chatMessages.removeChild(chatMessages.lastChild);
-        addMessage("حدث خطأ أثناء الاتصال بالخادم. حاول مرة أخرى.", "bot");
-        console.error(err);
-      } finally {
-        submitButton.disabled = false;
-        questionInput.focus();
+        --radius-lg: 20px;
+        --radius-md: 16px;
+        --radius-sm: 12px;
       }
-    });
-  </script>
-</body>
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Tajawal", system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 15px;
+        background: radial-gradient(
+            circle at top left,
+            rgba(215, 165, 98, 0.18),
+            transparent 55%
+          ),
+          radial-gradient(
+            circle at bottom right,
+            rgba(0, 8, 11, 0.25),
+            transparent 55%
+          ),
+          var(--color-beige);
+        padding: 16px;
+
+        /* التوسيط */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      main.shell {
+        width: 100%;
+        max-width: 1100px;
+        background: rgba(245, 237, 227, 0.96);
+        border-radius: var(--radius-lg);
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.15),
+          0 0 0 1px rgba(0, 8, 11, 0.08);
+        overflow: hidden;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0;
+        min-height: 70vh;
+      }
+
+      @media (min-width: 900px) {
+        .layout {
+          grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr);
+        }
+      }
+
+      .sidebar {
+        background: linear-gradient(
+          135deg,
+          var(--color-black) 0%,
+          #020b12 45%,
+          #111723 100%
+        );
+        color: #fdfbf7;
+        padding: 22px 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 20px;
+      }
+
+      @media (max-width: 899px) {
+        .sidebar {
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+      }
+
+      .brand-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 11px;
+        border-radius: 999px;
+        background: rgba(245, 237, 227, 0.1);
+        border: 1px solid rgba(215, 165, 98, 0.5);
+        font-size: 13px;
+        color: #f8f5f0;
+      }
+
+      .brand-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: var(--color-gold-soft);
+      }
+
+      .sidebar-title {
+        font-size: 26px;
+        font-weight: 700;
+        margin: 14px 0 8px;
+        letter-spacing: 0.03em;
+      }
+
+      .sidebar-subtitle {
+        font-size: 14.5px;
+        line-height: 1.8;
+        color: rgba(249, 244, 236, 0.9);
+      }
+
+      .sidebar-pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .pill {
+        font-size: 12.5px;
+        padding: 6px 11px;
+        border-radius: 999px;
+        background: rgba(245, 237, 227, 0.08);
+        border: 1px solid rgba(245, 237, 227, 0.18);
+        color: #f8f5f0;
+      }
+
+      .sidebar-footer {
+        font-size: 12px;
+        line-height: 1.7;
+        color: rgba(248, 243, 235, 0.9);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        padding-top: 12px;
+        margin-top: 6px;
+      }
+
+      .sidebar-footer a {
+        color: var(--color-gold-soft);
+        text-decoration: none;
+      }
+
+      .sidebar-footer a:hover {
+        text-decoration: underline;
+      }
+
+      .chat-panel {
+        padding: 18px 16px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px; /* قللنا الفراغ */
+      }
+
+      @media (min-width: 900px) {
+        .chat-panel {
+          padding: 20px 18px 16px;
+        }
+      }
+
+      .chat-header-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 2px;
+      }
+
+      .chat-title-block {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .chat-title {
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--color-black-soft);
+      }
+
+      .chat-caption {
+        font-size: 13px;
+        color: #7c6b58;
+      }
+
+      .status-chip {
+        font-size: 12px;
+        padding: 6px 11px;
+        border-radius: 999px; /* حواف ناعمة */
+        background: rgba(0, 8, 11, 0.06);
+        border: 1px solid rgba(0, 8, 11, 0.1);
+        color: #4a3d30;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #16a34a;
+      }
+
+      .chat-card {
+        background: #fdf9f3;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(0, 8, 11, 0.06);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        flex: 1;
+      }
+
+      .chat-messages {
+        flex: 1;
+        padding: 14px 14px 10px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 8, 11, 0.35) rgba(0, 0, 0, 0);
+      }
+
+      .chat-messages::-webkit-scrollbar {
+        width: 6px;
+      }
+      .chat-messages::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .chat-messages::-webkit-scrollbar-thumb {
+        background: rgba(0, 8, 11, 0.28);
+        border-radius: 999px;
+      }
+
+      .empty-state {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 8px;
+        color: #8a7a65;
+        font-size: 13.5px;
+      }
+
+      .empty-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: rgba(215, 165, 98, 0.14);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        margin-bottom: 4px;
+      }
+
+      .message-row {
+        display: flex;
+        margin-bottom: 10px;
+      }
+
+      .message-row.user {
+        justify-content: flex-end;
+      }
+
+      .message-row.bot {
+        justify-content: flex-start;
+      }
+
+      .message-bubble {
+        max-width: 90%;
+        padding: 10px 12px;
+        border-radius: 18px;
+        font-size: 15px; /* أكبر */
+        line-height: 1.8;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+
+      .message-bubble.user {
+        background: var(--color-gold-soft);
+        color: #1d1405;
+        border-bottom-right-radius: 5px;
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+      }
+
+      .message-bubble.bot {
+        background: #ffffff;
+        border: 1px solid rgba(0, 8, 11, 0.05);
+        border-bottom-left-radius: 5px;
+        color: #28231e;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.04);
+      }
+
+      .message-meta {
+        font-size: 11.5px;
+        opacity: 0.75;
+        margin-bottom: 3px;
+      }
+
+      .bot-label {
+        color: #705641;
+        font-weight: 500;
+      }
+
+      .user-label {
+        color: #3b2b19;
+        font-weight: 500;
+        text-align: left;
+      }
+
+      .chat-input-bar {
+        border-top: 1px solid rgba(0, 8, 11, 0.06);
+        padding: 9px 10px;
+        background: #f7efe5;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      @media (min-width: 640px) {
+        .chat-input-bar {
+          flex-direction: row;
+          align-items: flex-end;
+        }
+      }
+
+      .chat-input-bar textarea {
+        flex: 1;
+        resize: none;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(0, 8, 11, 0.18);
+        padding: 9px 11px;
+        font-family: inherit;
+        font-size: 14.5px;
+        min-height: 44px;
+        max-height: 100px;
+        background: #fdf9f3;
+        outline: none;
+        transition: border-color 0.12s ease, box-shadow 0.12s ease,
+          background 0.12s ease;
+      }
+
+      .chat-input-bar textarea:focus {
+        border-color: var(--color-gold-soft);
+        box-shadow: 0 0 0 1px rgba(215, 165, 98, 0.5);
+        background: #ffffff;
+      }
+
+      .input-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+      }
+
+      .hint-text {
+        font-size: 11.5px;
+        color: #8d7b65;
+      }
+
+      .btn-primary {
+        border: none;
+        border-radius: 999px; /* مستطيل أسود بحواف ناعمة */
+        padding: 8px 20px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        background: var(--color-black);
+        color: #fdf7ec;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: transform 0.1s ease, box-shadow 0.1s ease,
+          background 0.15s ease;
+      }
+
+      .btn-primary span.icon {
+        font-size: 14px;
+        display: inline-block;
+        transform: translateY(1px);
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: #020f19;
+        transform: translateY(-1px);
+      }
+
+      .btn-primary:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: 0 6px 12px rgba(0, 8, 11, 0.35);
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: default;
+        box-shadow: none;
+      }
+
+      .toast {
+        position: fixed;
+        inset-inline-start: 50%;
+        transform: translateX(-50%);
+        bottom: 16px;
+        max-width: 90vw;
+        background: #2b1512;
+        color: #fef3f2;
+        font-size: 12.5px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        display: none;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        z-index: 50;
+      }
+
+      .toast.show {
+        display: inline-flex;
+      }
+
+      .toast-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #f97373;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+          <div>
+            <div class="brand-badge">
+              <span class="brand-dot"></span>
+              <span>بيان · Fatwa Assistant</span>
+            </div>
+            <h1 class="sidebar-title">مساعد فتاوى ابن باز</h1>
+            <p class="sidebar-subtitle">
+              اطرح سؤالك الشرعي بالعربية، وسيتم البحث في فتاوى الشيخ عبدالعزيز
+              بن باز رحمه الله، ثم توليد إجابة مبسطة مع روابط للفتاوى الأكثر
+              صلة.
+            </p>
+
+            <div class="sidebar-pill-row">
+              <span class="pill">يعتمد على فتاوى ابن باز فقط</span>
+              <span class="pill">يبين إن كان السؤال موجودًا في قاعدة البيانات</span>
+              <span class="pill">لا يغني عن سؤال أهل العلم</span>
+            </div>
+          </div>
+
+          <div class="sidebar-footer">
+            <div>
+              • النصوص المعتمدة من
+              <a
+                href="https://binbaz.org.sa/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                الموقع الرسمي لسماحة الشيخ ابن باز
+              </a>
+            </div>
+            <div>
+              • مصدر البيانات:
+              <a
+                href="https://www.kaggle.com/datasets/a5medashraf/bin-baz-fatwas-dataset"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Bin Baz Fatwas Dataset (Kaggle)
+              </a>
+            </div>
+            <div style="margin-top: 6px">
+              هذا النظام تجريبي للأغراض التعليمية، ولا يُعد فتوى رسمية ولا
+              بديلًا عن استشارة العلماء الثقات.
+            </div>
+          </div>
+        </aside>
+
+        <!-- Chat panel -->
+        <section class="chat-panel">
+          <header class="chat-header-row">
+            <div class="chat-title-block">
+              <div class="chat-title">مساحة الأسئلة</div>
+              <div class="chat-caption">
+                اكتب سؤالك ثم انتظر حتى يتم البحث في الفتاوى.
+              </div>
+            </div>
+            <div class="status-chip" id="statusChip">
+              <span class="status-dot" id="statusDot"></span>
+              <span id="statusText">جاهز لاستقبال سؤالك</span>
+            </div>
+          </header>
+
+          <div class="chat-card">
+            <div id="chatMessages" class="chat-messages">
+              <div class="empty-state" id="emptyState">
+                <div class="empty-icon">💬</div>
+                <div>ابدأ بسؤال مثل:</div>
+                <div>
+                  «ما حكم إخراج زكاة الفطر نقداً؟» أو «ما حكم ترديد الإقامة خلف
+                  المقيم؟»
+                </div>
+              </div>
+            </div>
+
+            <form id="chatForm" class="chat-input-bar">
+              <textarea
+                id="questionInput"
+                rows="2"
+                placeholder="اكتب سؤالك الشرعي هنا..."
+                required
+              ></textarea>
+
+              <div class="input-actions">
+                <div class="hint-text">
+                  الرجاء تجنّب ذكر الأسماء والخصوصيات.
+                </div>
+                <button type="submit" class="btn-primary">
+                  <span class="icon">➤</span>
+                  <span>إرسال السؤال</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </section>
+
+      <div class="toast" id="toast">
+        <span class="toast-dot"></span>
+        <span id="toastMessage">حدث خطأ أثناء الاتصال بالخادم.</span>
+      </div>
+    </main>
+
+    <script>
+      const API_URL = "http://127.0.0.1:8000/api/chat";
+
+      const chatMessages = document.getElementById("chatMessages");
+      const chatForm = document.getElementById("chatForm");
+      const questionInput = document.getElementById("questionInput");
+      const submitButton = chatForm.querySelector("button");
+      const emptyState = document.getElementById("emptyState");
+
+      const statusDot = document.getElementById("statusDot");
+      const statusText = document.getElementById("statusText");
+
+      const toast = document.getElementById("toast");
+      const toastMessage = document.getElementById("toastMessage");
+
+      function showToast(message) {
+        toastMessage.textContent = message;
+        toast.classList.add("show");
+        setTimeout(() => toast.classList.remove("show"), 3500);
+      }
+
+      function setStatus(state) {
+        if (state === "idle") {
+          statusDot.style.backgroundColor = "#16a34a";
+          statusText.textContent = "جاهز لاستقبال سؤالك";
+        } else if (state === "loading") {
+          statusDot.style.backgroundColor = "#d7a562";
+          statusText.textContent = "جارٍ البحث في الفتاوى...";
+        } else if (state === "error") {
+          statusDot.style.backgroundColor = "#ef4444";
+          statusText.textContent = "حدث خطأ في الاتصال";
+        }
+      }
+
+      function createMessageElement(text, sender) {
+        const row = document.createElement("div");
+        row.className = "message-row " + sender;
+
+        const bubble = document.createElement("div");
+        bubble.className = "message-bubble " + sender;
+
+        const meta = document.createElement("div");
+        meta.className =
+          "message-meta " + (sender === "bot" ? "bot-label" : "user-label");
+        meta.textContent = sender === "bot" ? "بيان · مساعد الفتاوى" : "سؤالك";
+
+        const content = document.createElement("div");
+        content.textContent = text;
+
+        bubble.appendChild(meta);
+        bubble.appendChild(content);
+
+        row.appendChild(bubble);
+        return row;
+      }
+
+      function addMessage(text, sender) {
+        if (emptyState) {
+          emptyState.remove();
+        }
+        const el = createMessageElement(text, sender);
+        chatMessages.appendChild(el);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return el;
+      }
+
+      chatForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const question = questionInput.value.trim();
+        if (!question) return;
+
+        addMessage(question, "user");
+        questionInput.value = "";
+        questionInput.style.height = "auto";
+
+        submitButton.disabled = true;
+        setStatus("loading");
+
+        const loadingMsg = addMessage("جاري جلب الفتوى...", "bot");
+
+        try {
+          const resp = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question: question, top_k: 5 }),
+          });
+
+          if (!resp.ok) {
+            throw new Error("HTTP " + resp.status);
+          }
+
+          const data = await resp.json();
+
+          loadingMsg.remove();
+
+          let finalText = data.answer || "";
+
+          if (data.fatwa_link) {
+            finalText += "\n\nرابط الفتوى المطابقة:\n" + data.fatwa_link;
+          } else if (
+            Array.isArray(data.related_fatwas) &&
+            data.related_fatwas.length > 0
+          ) {
+            finalText += "\n\nأقرب الفتاوى من ابن باز:\n";
+            data.related_fatwas.forEach((f, idx) => {
+              if (f.link) {
+                const title = f.title || f.question || "فتوى ذات صلة";
+                finalText += `\n${idx + 1}. ${title}\n${f.link}\n`;
+              }
+            });
+          }
+
+          addMessage(finalText.trim(), "bot");
+          setStatus("idle");
+        } catch (err) {
+          console.error(err);
+          loadingMsg.remove();
+          addMessage("حدث خطأ أثناء الاتصال بالخادم. حاول مرة أخرى.", "bot");
+          setStatus("error");
+          showToast(
+            "تعذّر الاتصال بالخادم. تأكد أن الخدمة تعمل ثم أعد المحاولة."
+          );
+        } finally {
+          submitButton.disabled = false;
+          questionInput.focus();
+        }
+      });
+
+      // Auto-resize textarea
+      questionInput.addEventListener("input", () => {
+        questionInput.style.height = "auto";
+        questionInput.style.height =
+          Math.min(questionInput.scrollHeight, 100) + "px";
+      });
+
+      setStatus("idle");
+    </script>
+  </body>
 </html>
