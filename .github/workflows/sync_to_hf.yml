@@ -32,9 +32,8 @@ jobs:
 
           # استخدم الـ token من secrets
           hf_token: ${{ secrets.HF_TOKEN }}
-
-          # خله Public
-          private: false
+          # Visibility is left unset so the action doesn't pass a string
+          # (the HF API expects a boolean; passing a string caused a BadRequest)
 
           # subdirectory: تقدر تخليها فاضية عشان يـsync كل الريبو
           subdirectory: ""
