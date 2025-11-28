@@ -1,21 +1,11 @@
-# Python venv
 .venv/
 __pycache__/
 *.pyc
-
-# IDE
 .vscode/
 .idea/
 
-# تجاهل البيانات الخام الكبيرة فقط
 data/raw/
 *.csv
 
-# لا تتجاهل processed/index عشان نرفعهم للـ Space
-# لا تتجاهل *.parquet / *.npy الآن
-# *.parquet
-# *.npy
-
-# Misc
 .env
 *.log

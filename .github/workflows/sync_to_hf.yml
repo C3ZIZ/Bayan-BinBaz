@@ -37,14 +37,9 @@ jobs:
               repo_type="space",
               token=token,
               commit_message="Sync from GitHub main",
-              # استثني الملفات الثقيلة / الداتا
               ignore_patterns=[
                   "data/raw/*",
-                  "data/processed/*",
-                  "data/index/*",
                   "*.csv",
-                  "*.parquet",
-                  "*.npy",
                   ".git/*",
                   ".github/*/__pycache__/*",
               ],
