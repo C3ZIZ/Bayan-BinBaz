@@ -5,7 +5,6 @@ __pycache__/
 .vscode/
 .idea/
 
-data/raw/
 data/processed/
 data/index/
 *.parquet
