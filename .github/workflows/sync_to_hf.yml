@@ -1,4 +1,4 @@
-name: Sync to Hugging Face hub
+name: Sync to Hugging Face Space
 
 on:
   push:
@@ -13,18 +13,40 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # عشان الهيستوري كامل
-          lfs: true        # لو احتجت Git LFS لاحقًا
+          fetch-depth: 0
 
-      - name: Push to Hugging Face Space
+      - name: Upload to Hugging Face Space with huggingface_hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # نظف remote قديم لو موجود
-          git remote remove space || true
+          python -m pip install --upgrade "huggingface_hub>=0.24.0"
 
-          # أضف remote للـ Space
-          git remote add space https://CIAZIZ:$HF_TOKEN@huggingface.co/spaces/CIAZIZ/Bayan-BinBaz
+          python - << 'EOF'
+          import os
+          from huggingface_hub import HfApi
 
-          # ادفع فرع main إلى الـ Space
-          git push --force space main
+          api = HfApi()
+
+          repo_id = "CIAZIZ/Bayan-BinBaz"  # Space ID في هاجينغ فيس
+          token = os.environ["HF_TOKEN"]
+
+          api.upload_folder(
+              folder_path=".",      # ارفع من جذر الريبو
+              path_in_repo=".",     # إلى جذر الـ Space
+              repo_id=repo_id,
+              repo_type="space",
+              token=token,
+              commit_message="Sync from GitHub main",
+              # استثني الملفات الثقيلة / الداتا
+              ignore_patterns=[
+                  "data/raw/*",
+                  "data/processed/*",
+                  "data/index/*",
+                  "*.csv",
+                  "*.parquet",
+                  "*.npy",
+                  ".git/*",
+                  ".github/*/__pycache__/*",
+              ],
+          )
+          EOF
