@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+
+.vscode/
+.idea/
+
+data/raw/
+data/processed/
+data/index/
+*.parquet
+*.npy
+
+.env
+*.log
