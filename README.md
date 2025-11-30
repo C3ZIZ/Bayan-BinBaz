@@ -1,3 +1,13 @@
+---
+title: Bayan - Bin Baz Fatwa Assistant (LLM + RAG)
+emoji: 📚
+colorFrom: gray
+colorTo: blue
+sdk: gradio
+sdk_version: 6.0.1
+app_file: app.py
+pinned: false
+---
 # Bayan – BinBaz Fatwa Assistant (Arabic)
 
 Bayan is an Arabic fatwa assistant built on top of the published fatwas of **Shaykh Abdulaziz ibn Baz (رحمه الله)**.
