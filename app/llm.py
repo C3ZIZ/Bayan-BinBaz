@@ -16,7 +16,7 @@ _LLM_LOCK = threading.Lock()
 def get_llm() -> Llama:
     llm = Llama.from_pretrained(
         repo_id="Omartificial-Intelligence-Space/ALLaM-7B-Instruct-preview-Q4_K_M-GGUF",
-        filename="*q4_k_m.gguf",
+        filename="*q4_k_m.gguf", # q4 so 4 to 32 bits (good enough) small model
         n_ctx=2048,
         n_gpu_layers=0,
         n_batch=64,
