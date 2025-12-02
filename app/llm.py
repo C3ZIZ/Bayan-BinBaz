@@ -1,8 +1,8 @@
 from functools import lru_cache # also store ALLAM chace
-from typing import List, Dict, Any
-import threading
 
 from llama_cpp import Llama # GGUF runner
+from typing import List, Dict, Any
+import threading
 
 # Got problem with HuggingFace managing this model locally.
 MAX_ANSWER_CHARS = 800

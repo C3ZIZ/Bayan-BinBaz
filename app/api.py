@@ -1,8 +1,8 @@
 from fastapi import APIRouter
-
+from .schemas import ChatRequest, ChatResponse, FatwaHit
 from .retrieval import get_retriever
 from .llm import generate_answer
-from .schemas import ChatRequest, ChatResponse, FatwaHit
+
 
 
 router = APIRouter()

@@ -1,9 +1,8 @@
 from functools import lru_cache # store retriever
-from pathlib import Path
-from typing import List, Dict, Any
-
 import numpy as np
 import pandas as pd
+from typing import List, Dict, Any
+from pathlib import Path
 from FlagEmbedding import BGEM3FlagModel
 
 
