@@ -6,4 +6,4 @@ FlagEmbedding==1.2.10
 llama-cpp-python==0.3.6
 pydantic==2.9.0
 python-dotenv==1.0.1
-gradio==4.44.0
+gradio
