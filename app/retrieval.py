@@ -1,4 +1,4 @@
-from functools import lru_cache
+from functools import lru_cache # store retriever
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -15,16 +15,16 @@ class FatwaRetriever:
     def __init__(self):
         if not EMB_PATH.exists() or not META_PATH.exists():
             raise FileNotFoundError(
-                "Embeddings or meta files not found. Run build_index.py first."
+                "Embeddings or meta files not found!"
             )
 
         # Load embeddings matrix: (N, D)
-        self.embeddings = np.load(EMB_PATH)  # Already normalized
+        self.embeddings = np.load(EMB_PATH)
         self.meta = pd.read_parquet(META_PATH)
 
         if len(self.embeddings) != len(self.meta):
             raise RuntimeError(
-                f"Embeddings rows ({len(self.embeddings)}) != meta rows ({len(self.meta)})"
+                f"Embeddings rows ({len(self.embeddings)}) not as meta rows ({len(self.meta)})"
             )
 
         # Load BGE-M3 model
@@ -49,7 +49,7 @@ class FatwaRetriever:
         # cosine similarity = dot (embeddings (N,D) · query(D,))
         scores = self.embeddings @ query_vec  # shape: (N,)
 
-        # If N < top_k, adjust it
+        # If N < top_k fix it
         top_k = min(top_k, len(scores))
         # Get indices of top_k highest scores
         idx_part = np.argpartition(-scores, top_k - 1)[:top_k]

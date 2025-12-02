@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from FlagEmbedding import BGEM3FlagModel
+from FlagEmbedding import BGEM3FlagModel # might be the best model with our case?
 
 
 PROCESSED_PATH = Path("data/processed/fatwas.parquet")
@@ -16,13 +16,12 @@ META_PATH = INDEX_DIR / "fatwas_meta.parquet"
 def main():
     if not PROCESSED_PATH.exists():
         raise FileNotFoundError(
-            f"{PROCESSED_PATH} not found. Run prepare_data.py first."
+            f"{PROCESSED_PATH} not found."
         )
 
     df = pd.read_parquet(PROCESSED_PATH)
     texts = (df["question"].fillna("") + "\n" + df["answer"].fillna("")).tolist()
 
-    print(f"Encoding {len(texts)} fatwas with BGE-M3 (no faiss)...")
     model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
     outputs = model.encode(
         texts,
@@ -36,14 +35,14 @@ def main():
     dense_vecs = dense_vecs / norms
 
     np.save(EMB_PATH, dense_vecs)
-    print(f"Embeddings saved to {EMB_PATH}")
+    print(f"Embeddings to {EMB_PATH}")
 
-    # حفظ meta
+    
     meta_cols = ["id", "question", "title", "answer", "link", "categories"]
     meta_cols = [c for c in meta_cols if c in df.columns]
     df_meta = df[meta_cols].copy()
     df_meta.to_parquet(META_PATH, index=False)
-    print(f"Meta saved to {META_PATH}")
+    print(f"Meta saved {META_PATH}")
 
 
 if __name__ == "__main__":

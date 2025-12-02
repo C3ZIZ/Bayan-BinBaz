@@ -7,14 +7,8 @@ OUT_DIR = Path("data/processed")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 OUT_PATH = OUT_DIR / "fatwas.parquet"
 
-
+# clean and normalize column names (I think Kaggle is ready to used but just in case)
 def normalize_fatwa_table(df: pd.DataFrame, path: Path) -> pd.DataFrame:
-    """
-    يحوّل جدول واحد من شكل Kaggle:
-    questions, answers, titles, links, categories
-    إلى أعمدة موحدة:
-    id, question, answer, title, link, categories
-    """
 
     cols = {c.lower(): c for c in df.columns}
 
@@ -29,11 +23,6 @@ def normalize_fatwa_table(df: pd.DataFrame, path: Path) -> pd.DataFrame:
     t_col = pick("title", "titles")
     l_col = pick("link", "links", "url")
     c_col = pick("categories", "category")
-
-    if q_col is None or a_col is None:
-        # هذا الملف ما يهمنا
-        print(f"[SKIP] {path} (لا يحتوي على question(s)/answer(s))")
-        return pd.DataFrame()
 
     rename_map = {
         q_col: "question",
@@ -65,6 +54,7 @@ def normalize_fatwa_table(df: pd.DataFrame, path: Path) -> pd.DataFrame:
     return df[["question", "answer", "title", "link", "categories"]]
 
 
+# Future work to use my scraped data and add it with the Kaggle data
 def load_fatwa_tables() -> pd.DataFrame:
     if not RAW_DIR.exists():
         raise FileNotFoundError(
@@ -99,7 +89,7 @@ def load_fatwa_tables() -> pd.DataFrame:
     if not tables:
         raise RuntimeError(
             "Not fit data/raw.\n"
-            "Make sure the Kaggle file contains the columns: questions, answers, titles, links, categories."
+            "Make sure the data file contains columns: questions, answers, titles, links, categories."
         )
 
     df_all = pd.concat(tables, ignore_index=True)

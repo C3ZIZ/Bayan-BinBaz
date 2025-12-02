@@ -1,30 +1,26 @@
-from functools import lru_cache
+from functools import lru_cache # also store ALLAM chace
 from typing import List, Dict, Any
 import threading
 
-from llama_cpp import Llama
+from llama_cpp import Llama # GGUF runner
 
-# إعدادات أخف للـ Space
-MAX_ANSWER_CHARS = 800       # أقصى طول مقتطف الفتوى
-MAX_HITS_FOR_PROMPT = 3      # عدد الفتاوى في وضع approx
-MAX_TOKENS = 384             # عدد التوكينات اللي نطلبها من النموذج
+# Got problem with HuggingFace managing this model locally.
+MAX_ANSWER_CHARS = 800
+MAX_HITS_FOR_PROMPT = 3
+MAX_TOKENS = 384
 
 _LLM_LOCK = threading.Lock()
 
 
 @lru_cache(maxsize=1)
 def get_llm() -> Llama:
-    """
-    تحميل ALLaM-7B-… كـ GGUF عبر llama-cpp.
-    إعدادات خفيفة تناسب CPU Basic قدر الإمكان.
-    """
     llm = Llama.from_pretrained(
         repo_id="Omartificial-Intelligence-Space/ALLaM-7B-Instruct-preview-Q4_K_M-GGUF",
         filename="*q4_k_m.gguf",
-        n_ctx=2048,        # خفّضنا الكونتكست عشان الرام
-        n_gpu_layers=0,    # في Space ما فيه GPU
+        n_ctx=2048,
+        n_gpu_layers=0,
         n_batch=64,
-        n_threads=4,       # يقدر يتحكم فيها الـ Runtime
+        n_threads=4,
         use_mmap=True,
         use_mlock=False,
         verbose=False,

@@ -8,7 +8,7 @@ from .schemas import ChatRequest, ChatResponse, FatwaHit
 router = APIRouter()
 
 
-EXACT_THRESHOLD = 0.90  # عتبة الـ cosine similarity لاعتبار السؤال "نفسه تقريبًا"
+EXACT_THRESHOLD = 0.90
 
 
 @router.post("/chat", response_model=ChatResponse)

@@ -3,17 +3,13 @@ from typing import List, Dict, Any
 
 from llama_cpp import Llama
 
-# This version can be used LOCALLY HuggingFace cant manage it well.
 @lru_cache(maxsize=1)
 def get_llm() -> Llama:
-    """
-    Load ALLaM-7B-Instruct (GGUF) via llama-cpp-python.
-    """
     llm = Llama.from_pretrained(
         repo_id="Omartificial-Intelligence-Space/ALLaM-7B-Instruct-preview-Q4_K_M-GGUF",
         filename="*q4_k_m.gguf",
         n_ctx=4096,
-        n_gpu_layers=0,  # If CUDA is available, use GPU; otherwise CPU
+        n_gpu_layers=0,
         verbose=False,
     )
     return llm
