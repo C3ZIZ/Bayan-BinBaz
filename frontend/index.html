@@ -559,7 +559,8 @@
     </main>
 
     <script>
-      const API_URL = "http://127.0.0.1:8000/api/chat";
+      // Relative path so the UI works wherever it's served from (localhost, VPS, Docker).
+      const API_URL = "/api/chat";
 
       const chatMessages = document.getElementById("chatMessages");
       const chatForm = document.getElementById("chatForm");
@@ -605,6 +606,8 @@
         meta.textContent = sender === "bot" ? "بيان · مساعد الفتاوى" : "سؤالك";
 
         const content = document.createElement("div");
+        content.className = "message-text";
+        content.style.whiteSpace = "pre-wrap";
         content.textContent = text;
 
         bubble.appendChild(meta);
@@ -624,6 +627,35 @@
         return el;
       }
 
+      // Empty bot bubble whose text node we stream into.
+      function addBotBubble() {
+        if (emptyState) emptyState.remove();
+        const el = createMessageElement("", "bot");
+        chatMessages.appendChild(el);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return el.querySelector(".message-text");
+      }
+
+      // Build the "related fatwas / matched link" block appended after the answer.
+      function buildLinksText(meta) {
+        let extra = "";
+        if (meta.fatwa_link) {
+          extra += "\n\nرابط الفتوى المطابقة:\n" + meta.fatwa_link;
+        } else if (
+          Array.isArray(meta.related_fatwas) &&
+          meta.related_fatwas.length > 0
+        ) {
+          extra += "\n\nأقرب الفتاوى من ابن باز:\n";
+          meta.related_fatwas.forEach((f, idx) => {
+            if (f.link) {
+              const title = f.title || f.question || "فتوى ذات صلة";
+              extra += `\n${idx + 1}. ${title}\n${f.link}\n`;
+            }
+          });
+        }
+        return extra;
+      }
+
       chatForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const question = questionInput.value.trim();
@@ -636,53 +668,119 @@
         submitButton.disabled = true;
         setStatus("loading");
 
-        const loadingMsg = addMessage("جاري جلب الفتوى...", "bot");
+        const content = addBotBubble();
+        content.textContent = "…";
+
+        // ---- typewriter state ----
+        let prefix = ""; // status header (shown instantly, before the answer)
+        let suffix = ""; // related-fatwas block (appended at the very end)
+        let shown = ""; // answer chars already revealed
+        let pending = ""; // answer chars still queued to reveal
+        let started = false;
+        let streamDone = false;
+        let finished = false;
+        let hadError = false;
+
+        const render = () => {
+          // Show the related-fatwas block only once the answer has finished typing.
+          content.textContent = prefix + shown + (finished ? suffix : "");
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        };
+
+        const begin = () => {
+          if (!started) {
+            started = true;
+            content.textContent = prefix;
+          }
+        };
+
+        // Reveal characters smoothly, catching up faster when the backlog grows.
+        const timer = setInterval(() => {
+          if (pending.length > 0) {
+            const step = Math.max(1, Math.ceil(pending.length / 40));
+            shown += pending.slice(0, step);
+            pending = pending.slice(step);
+            render();
+          } else if (streamDone) {
+            finished = true;
+            clearInterval(timer);
+            render();
+            setStatus(hadError ? "error" : "idle");
+            submitButton.disabled = false;
+            questionInput.focus();
+          }
+        }, 18);
+
+        const handleEvent = (evt, dataStr) => {
+          let data = {};
+          try {
+            data = JSON.parse(dataStr);
+          } catch (_) {}
+          if (evt === "meta") {
+            prefix = data.header ? data.header + "\n\n" : "";
+            suffix = buildLinksText(data);
+            begin();
+            render();
+          } else if (evt === "token") {
+            begin();
+            pending += data.t || "";
+          } else if (evt === "done") {
+            streamDone = true;
+          } else if (evt === "error") {
+            hadError = true;
+            pending += "\n\n[خطأ] " + (data.message || "تعذّر توليد الجواب.");
+            streamDone = true;
+            showToast("تعذّر توليد الجواب. تأكد من إعداد HF_TOKEN على الخادم.");
+          }
+        };
 
         try {
-          const resp = await fetch(API_URL, {
+          const resp = await fetch("/api/chat/stream", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ question: question, top_k: 5 }),
           });
+          if (!resp.ok || !resp.body) throw new Error("HTTP " + resp.status);
 
-          if (!resp.ok) {
-            throw new Error("HTTP " + resp.status);
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+          let buf = "";
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+
+            let sep;
+            while ((sep = buf.indexOf("\n\n")) !== -1) {
+              const frame = buf.slice(0, sep);
+              buf = buf.slice(sep + 2);
+              let evt = "message";
+              const dataLines = [];
+              frame.split("\n").forEach((line) => {
+                if (line.startsWith("event:")) evt = line.slice(6).trim();
+                else if (line.startsWith("data:"))
+                  dataLines.push(line.slice(5).replace(/^ /, ""));
+              });
+              if (dataLines.length || evt !== "message")
+                handleEvent(evt, dataLines.join("\n"));
+            }
           }
-
-          const data = await resp.json();
-
-          loadingMsg.remove();
-
-          let finalText = data.answer || "";
-
-          if (data.fatwa_link) {
-            finalText += "\n\nرابط الفتوى المطابقة:\n" + data.fatwa_link;
-          } else if (
-            Array.isArray(data.related_fatwas) &&
-            data.related_fatwas.length > 0
-          ) {
-            finalText += "\n\nأقرب الفتاوى من ابن باز:\n";
-            data.related_fatwas.forEach((f, idx) => {
-              if (f.link) {
-                const title = f.title || f.question || "فتوى ذات صلة";
-                finalText += `\n${idx + 1}. ${title}\n${f.link}\n`;
-              }
-            });
-          }
-
-          addMessage(finalText.trim(), "bot");
-          setStatus("idle");
+          streamDone = true;
         } catch (err) {
           console.error(err);
-          loadingMsg.remove();
-          addMessage("حدث خطأ أثناء الاتصال بالخادم. حاول مرة أخرى.", "bot");
-          setStatus("error");
+          hadError = true;
+          streamDone = true;
+          if (!started) {
+            clearInterval(timer);
+            content.textContent =
+              "حدث خطأ أثناء الاتصال بالخادم. حاول مرة أخرى.";
+            setStatus("error");
+            submitButton.disabled = false;
+          }
           showToast(
             "تعذّر الاتصال بالخادم. تأكد أن الخدمة تعمل ثم أعد المحاولة."
           );
-        } finally {
-          submitButton.disabled = false;
-          questionInput.focus();
         }
       });
 

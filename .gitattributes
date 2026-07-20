@@ -1,0 +1,14 @@
+# Normalize line endings: store everything as LF in the repo.
+# Prevents whole-file CRLF churn when checked out on Windows/mixed editors.
+* text=auto eol=lf
+
+# Keep CSV as LF too (it's the bulk of the noise otherwise).
+*.csv text eol=lf
+
+# Explicit binary types — never touch these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.zip binary

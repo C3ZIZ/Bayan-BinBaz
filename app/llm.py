@@ -1,31 +1,32 @@
-from functools import lru_cache # also store ALLAM chace
+import os
+from functools import lru_cache
+from typing import List, Dict, Any, Iterator
 
-from llama_cpp import Llama # GGUF runner
-from typing import List, Dict, Any
-import threading
+from huggingface_hub import InferenceClient
 
-# Got problem with HuggingFace managing this model locally.
-MAX_ANSWER_CHARS = 800
-MAX_HITS_FOR_PROMPT = 3
-MAX_TOKENS = 384
+# ---------------------------------------------------------------------------
+# LLM backend: Hugging Face Inference API (chat completion, streaming).
+#
+# Rationale: on a small CPU VPS (<=4GB RAM) a local 7B GGUF cannot run. Moving
+# the LLM to a hosted API gives top-tier Arabic answers with ZERO local LLM RAM
+# and native token streaming (used by the /api/chat/stream endpoint). BGE-M3
+# retrieval still runs locally. The old local llama.cpp path is kept for
+# reference in app/archive/llm.py.
+#
+# Everything is env-configurable so the same image runs anywhere.
+# ---------------------------------------------------------------------------
 
-_LLM_LOCK = threading.Lock()
+MAX_ANSWER_CHARS = int(os.getenv("LLM_CONTEXT_CHARS", "800"))  # أقصى طول مقتطف الفتوى في البرومبت
+MAX_HITS_FOR_PROMPT = int(os.getenv("LLM_MAX_HITS", "3"))      # عدد الفتاوى في وضع approx
+MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "512"))           # أقصى عدد توكينات في الجواب
+TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
 
-
-@lru_cache(maxsize=1)
-def get_llm() -> Llama:
-    llm = Llama.from_pretrained(
-        repo_id="Omartificial-Intelligence-Space/ALLaM-7B-Instruct-preview-Q4_K_M-GGUF",
-        filename="*q4_k_m.gguf", # q4 so 4 to 32 bits (good enough) small model
-        n_ctx=2048,
-        n_gpu_layers=0,
-        n_batch=64,
-        n_threads=4,
-        use_mmap=True,
-        use_mlock=False,
-        verbose=False,
-    )
-    return llm
+# Any chat model reachable by your HF token (HF Inference Providers). Override
+# via LLM_API_MODEL. Default is a strong multilingual model with good Arabic.
+LLM_API_MODEL = os.getenv("LLM_API_MODEL", "Qwen/Qwen2.5-72B-Instruct")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto")  # "auto" lets HF route to an available provider
+LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "120"))
+HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
 
 SYSTEM_PROMPT = """
@@ -37,6 +38,26 @@ SYSTEM_PROMPT = """
 - أجب باللغة العربية الفصحى المبسّطة.
 - اختم كل جواب بتنبيه مثل: «هذا الجواب آلي مبني على فتاوى الشيخ ابن باز، ولا يغني عن سؤال أهل العلم مباشرة».
 """.strip()
+
+
+@lru_cache(maxsize=1)
+def get_client() -> InferenceClient:
+    """Cached Hugging Face Inference client (no local weights loaded)."""
+    if not HF_TOKEN:
+        raise RuntimeError(
+            "HF_TOKEN is not set. The LLM runs via the Hugging Face Inference API; "
+            "set HF_TOKEN (or HUGGINGFACEHUB_API_TOKEN) in the environment."
+        )
+    try:
+        return InferenceClient(
+            model=LLM_API_MODEL,
+            token=HF_TOKEN,
+            provider=LLM_PROVIDER,
+            timeout=LLM_TIMEOUT,
+        )
+    except TypeError:
+        # Older huggingface_hub without the `provider` kwarg.
+        return InferenceClient(model=LLM_API_MODEL, token=HF_TOKEN, timeout=LLM_TIMEOUT)
 
 
 def _truncate(text: str, max_chars: int = MAX_ANSWER_CHARS) -> str:
@@ -105,15 +126,9 @@ def build_approx_prompt(user_question: str, hits: List[Dict[str, Any]]) -> str:
 """.strip()
 
 
-def generate_answer(
-    user_question: str,
-    hits: List[Dict[str, Any]],
-    exact: bool,
-) -> str:
-    llm = get_llm()
-
+def build_user_prompt(user_question: str, hits: List[Dict[str, Any]], exact: bool) -> str:
     if not hits:
-        user_prompt = f"""
+        return f"""
 السؤال:
 {user_question}
 
@@ -121,22 +136,44 @@ def generate_answer(
 رجاءً:
 - قدّم توجيهًا عامًا جدًا إن كان في قدرتك، بدون إصدار حكم تفصيلي.
 - اذكر بوضوح أن هذه ليست فتوى عن الشيخ ابن باز، وأن على السائل أن يسأل أهل العلم مباشرة.
-        """.strip()
-    else:
-        if exact:
-            user_prompt = build_exact_prompt(user_question, hits[0])
-        else:
-            user_prompt = build_approx_prompt(user_question, hits)
+""".strip()
+    if exact:
+        return build_exact_prompt(user_question, hits[0])
+    return build_approx_prompt(user_question, hits)
 
-    with _LLM_LOCK:
-        result = llm.create_chat_completion(
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.1,
-            max_tokens=MAX_TOKENS,
-        )
 
-    answer = result["choices"][0]["message"]["content"]
-    return answer.strip()
+def stream_answer(
+    user_question: str,
+    hits: List[Dict[str, Any]],
+    exact: bool,
+) -> Iterator[str]:
+    """Yield answer text deltas as they arrive from the API (for SSE streaming)."""
+    client = get_client()
+    user_prompt = build_user_prompt(user_question, hits, exact)
+
+    stream = client.chat_completion(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        max_tokens=MAX_TOKENS,
+        temperature=TEMPERATURE,
+        stream=True,
+    )
+
+    for chunk in stream:
+        try:
+            delta = chunk.choices[0].delta.content
+        except (AttributeError, IndexError, KeyError):
+            delta = None
+        if delta:
+            yield delta
+
+
+def generate_answer(
+    user_question: str,
+    hits: List[Dict[str, Any]],
+    exact: bool,
+) -> str:
+    """Non-streaming convenience wrapper (used by POST /api/chat)."""
+    return "".join(stream_answer(user_question, hits, exact)).strip()

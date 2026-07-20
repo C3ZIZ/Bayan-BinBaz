@@ -1,0 +1,24 @@
+.git
+.gitignore
+.gitattributes
+.github/
+
+.venv/
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+
+.vscode/
+.idea/
+
+.env
+*.log
+docs/
+
+# Local model cache (models download into the mounted volume at runtime)
+models/
+
+# Raw CSV is NOT needed at runtime — the index ships prebuilt. Keeps the build
+# context ~38MB smaller. (It stays in the git repo for rebuilding.)
+data/raw/

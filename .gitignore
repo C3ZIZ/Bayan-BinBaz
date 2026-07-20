@@ -1,11 +1,17 @@
 .venv/
+venv/
 __pycache__/
 *.pyc
+
 .vscode/
 .idea/
 
-data/raw/
-*.csv
-
 .env
+
 *.log
+
+# Local model cache — weights are multi-GB and download at runtime; never commit them.
+models/
+
+# NOTE: data/ (raw CSV, processed parquet, and the prebuilt index) IS committed on
+# purpose so the app ships ready-to-run. Do not re-add data/raw/ or *.csv here.

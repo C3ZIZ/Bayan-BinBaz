@@ -124,3 +124,108 @@ python -m venv .venv
 # source .venv/bin/activate
 
 pip install -r requirements.txt
+```
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env
+# then edit .env and set at least HF_TOKEN
+```
+
+### 3. Run the API + UI
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+Open <http://localhost:8000/> for the chat UI. The API is under `/api` (see below).
+
+> The prebuilt index ships in the repo (`data/index/`), so you do **not** need to
+> run `prepare_data.py` / `build_index.py` unless you want to rebuild it.
+
+---
+
+## Run on a VPS with Docker (CPU-only)
+
+This is the recommended way to deploy. Everything runs in one container; the only
+external dependency is the Hugging Face Inference API for the LLM.
+
+### Prerequisites
+
+- Docker + Docker Compose (`docker compose version`)
+- A Hugging Face token — see **Environment variables** below
+- ~4GB RAM available for the container, ~2GB disk for cached weights
+
+### Steps
+
+```bash
+git clone https://github.com/C3ZIZ/Bayan-BinBaz.git
+cd Bayan-BinBaz
+
+cp .env.example .env
+# edit .env and paste your HF_TOKEN (required)
+
+docker compose up -d --build
+```
+
+Then open `http://<YOUR_VPS_IP>:8000/`. Check health with `curl http://localhost:8000/health`
+and follow logs with `docker compose logs -f`.
+
+### How it fits in ~4GB (and frees RAM when idle)
+
+| Piece | Where it runs | RAM |
+|-------|---------------|-----|
+| Retrieval index (NumPy) + web app | Local (always) | ~0.3–0.5 GB |
+| **BGE-M3** query embedder | Local, **lazy-loaded** | ~2.3 GB *while active* |
+| LLM (answer generation) | **Hugging Face Inference API** | 0 GB local |
+
+After `MODEL_IDLE_TIMEOUT` seconds with no traffic, BGE-M3 is unloaded and the
+memory is returned to the OS (`malloc_trim`), dropping the container back to
+~0.3–0.5 GB so other projects can use the RAM. It reloads on the next question.
+
+### Streaming UX
+
+The UI calls `POST /api/chat/stream` (Server-Sent Events) and types the answer out
+token-by-token as the model generates it, so it feels fast even on the first token.
+
+---
+
+## Environment variables
+
+Copy `.env.example` → `.env`. Only `HF_TOKEN` is required; everything else has a default.
+
+| Variable | Default | Where to get / notes |
+|----------|---------|----------------------|
+| `HF_TOKEN` | — **(required)** | Hugging Face token. Get it at <https://huggingface.co/settings/tokens> → *Create new token* (Read; enable Inference Providers). Same token used by the HF Space sync action. |
+| `LLM_API_MODEL` | `Qwen/Qwen2.5-72B-Instruct` | Any chat model reachable by your token. Browse <https://huggingface.co/models?inference_provider=all&pipeline_tag=text-generation>. Arabic-strong: Qwen2.5-72B, Llama-3.3-70B, aya-expanse-32b. |
+| `LLM_PROVIDER` | `auto` | Inference provider routing. `auto` lets HF choose; or pin `hf-inference`, `together`, `fireworks-ai`, … (see the model page's *Providers*). |
+| `LLM_MAX_TOKENS` | `512` | Max length of the generated answer. |
+| `LLM_TEMPERATURE` | `0.1` | 0.0–0.3 keeps answers faithful to the fatwas. |
+| `LLM_TIMEOUT` | `120` | Seconds to wait on the API per request. |
+| `LLM_CONTEXT_CHARS` | `800` | Chars of each retrieved fatwa injected into the prompt. |
+| `LLM_MAX_HITS` | `3` | How many fatwas go into the prompt (approx mode). |
+| `EMB_MODEL_NAME` | `BAAI/bge-m3` | Local embedder. Must match the model the index was built with — change only if you rebuild the index. |
+| `EMB_USE_FP16` | `0` | Keep `0` on CPU; set `1` only on a GPU. |
+| `MODEL_IDLE_TIMEOUT` | `600` | Seconds of idleness before BGE-M3 is unloaded to free RAM. `0` = never unload. |
+| `MODEL_IDLE_CHECK_INTERVAL` | `60` | How often the idle monitor checks. |
+| `PORT` | `8000` | Host port to expose (container always listens on 8000). |
+| `OMP_NUM_THREADS` | `4` | CPU threads for the embedder — set to your VPS vCPU count. |
+
+---
+
+## API
+
+- `GET  /health` — liveness (does not load models)
+- `POST /api/chat` — full JSON answer: `{ "question": "…", "top_k": 5 }`
+- `POST /api/chat/stream` — same input, streamed as SSE (`meta` → `token`… → `done`)
+
+---
+
+## Notes
+
+- **Data is committed to the repo** (`data/raw` CSV, `data/processed`, and the
+  prebuilt `data/index`) so the app ships ready-to-run.
+- The **LLM runs via the Hugging Face Inference API** (not a local GGUF), which is
+  what keeps memory within a small VPS budget. The previous local `llama-cpp`
+  implementation is kept for reference in `app/archive/llm.py`.

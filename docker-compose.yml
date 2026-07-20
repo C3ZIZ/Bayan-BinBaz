@@ -1,0 +1,43 @@
+services:
+  bayan:
+    build: .
+    image: bayan-binbaz:latest
+    container_name: bayan-binbaz
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      # ---- LLM via Hugging Face Inference API (HF_TOKEN is REQUIRED) ----
+      HF_TOKEN: ${HF_TOKEN:?HF_TOKEN is required — set it in .env (see .env.example)}
+      LLM_API_MODEL: ${LLM_API_MODEL:-Qwen/Qwen2.5-72B-Instruct}
+      LLM_PROVIDER: ${LLM_PROVIDER:-auto}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-120}
+      LLM_CONTEXT_CHARS: ${LLM_CONTEXT_CHARS:-800}
+      LLM_MAX_HITS: ${LLM_MAX_HITS:-3}
+      # ---- Embeddings (BGE-M3, local) ----
+      EMB_MODEL_NAME: ${EMB_MODEL_NAME:-BAAI/bge-m3}
+      EMB_USE_FP16: ${EMB_USE_FP16:-0}
+      # ---- Idle RAM release ----
+      MODEL_IDLE_TIMEOUT: ${MODEL_IDLE_TIMEOUT:-600}
+      MODEL_IDLE_CHECK_INTERVAL: ${MODEL_IDLE_CHECK_INTERVAL:-60}
+      # ---- Runtime ----
+      HF_HOME: /models
+      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-4}
+    volumes:
+      # Persists BGE-M3 (~2.3GB) so it downloads only once, not on every restart.
+      - bayan-models:/models
+    restart: unless-stopped
+    # Cap at 4GB: BGE-M3 (~2.3GB while active) + overhead. Freed when idle.
+    # Lower/remove this if your VPS has less; the app frees RAM when idle anyway.
+    mem_limit: 4g
+    healthcheck:
+      # /health does NOT load models, so it comes up within seconds.
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  bayan-models:
