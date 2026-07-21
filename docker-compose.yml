@@ -3,8 +3,14 @@ services:
     build: .
     image: bayan-binbaz:latest
     container_name: bayan-binbaz
-    ports:
-      - "${PORT:-8000}:8000"
+    # Internal port only. A reverse proxy (Coolify's Traefik, nginx, …) routes to
+    # it — do NOT publish a host port here or you collide with whatever already
+    # uses it on the host (on a Coolify server, port 8000 is usually taken).
+    # In Coolify: set a Domain on this service and it routes to 8000 automatically.
+    # For a bare `docker compose up` (no proxy), docker-compose.override.yml
+    # publishes the port to the host so http://<host>:${PORT:-8000} works.
+    expose:
+      - "8000"
     environment:
       # ---- LLM via Hugging Face Inference API (HF_TOKEN is REQUIRED) ----
       HF_TOKEN: ${HF_TOKEN:?HF_TOKEN is required — set it in .env (see .env.example)}

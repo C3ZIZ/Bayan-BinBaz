@@ -172,6 +172,24 @@ docker compose up -d --build
 Then open `http://<YOUR_VPS_IP>:8000/`. Check health with `curl http://localhost:8000/health`
 and follow logs with `docker compose logs -f`.
 
+> The base `docker-compose.yml` only `expose`s port 8000 internally; the host
+> port is published by `docker-compose.override.yml`, which `docker compose`
+> loads automatically. If 8000 is taken, set `PORT=8080` (or any free port) in `.env`.
+
+### Deploy on Coolify
+
+Coolify routes to the app through its built-in proxy, so **do not publish a host
+port** (that causes `Bind for :::8000 failed: port is already allocated`). This
+repo is already set up for it — the base compose only `expose`s port 8000.
+
+1. Create the resource from this Git repo (Coolify auto-detects `docker-compose.yml`).
+2. In **Environment Variables**, add at least `HF_TOKEN` (see the table below).
+3. Set a **Domain** on the `bayan` service — Coolify's proxy routes it to port 8000
+   and issues SSL. Deploy.
+
+(Coolify runs `docker compose -f docker-compose.yml`, so it ignores
+`docker-compose.override.yml` and never binds a host port.)
+
 ### How it fits in ~4GB (and frees RAM when idle)
 
 | Piece | Where it runs | RAM |
