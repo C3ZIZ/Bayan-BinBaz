@@ -6,15 +6,18 @@ import platform
 import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
+from .fusion import mmr_select, reciprocal_rank_fusion
 from .normalize import normalize_arabic
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from FlagEmbedding import BGEM3FlagModel
+
+    from .lexical import BM25Index
 
 # FlagEmbedding (and through it torch) is imported lazily inside _ensure_model.
 # Importing it at module scope would pull ~1GB of framework into every process
@@ -37,6 +40,16 @@ EMB_USE_FP16 = os.getenv("EMB_USE_FP16", "0") == "1"
 # 81% answer text while users send short questions, which compressed a perfect
 # self-match to a median cosine of 0.815. Tuned by eval/run_retrieval_eval.py.
 ALPHA = float(os.getenv("RETRIEVAL_ALPHA", "0.65"))
+
+# Hybrid retrieval: fuse dense and BM25 rankings via RRF, then diversify with
+# MMR. All switchable so eval/run_retrieval_eval.py can A/B each piece.
+USE_HYBRID = os.getenv("RETRIEVAL_HYBRID", "1") == "1"
+USE_MMR = os.getenv("RETRIEVAL_MMR", "1") == "1"
+CANDIDATE_DEPTH = int(os.getenv("RETRIEVAL_DEPTH", "50"))
+MMR_POOL = int(os.getenv("RETRIEVAL_MMR_POOL", "25"))
+MMR_LAMBDA = float(os.getenv("RETRIEVAL_MMR_LAMBDA", "0.7"))
+DENSE_WEIGHT = float(os.getenv("RETRIEVAL_DENSE_WEIGHT", "1.0"))
+LEXICAL_WEIGHT = float(os.getenv("RETRIEVAL_LEXICAL_WEIGHT", "0.6"))
 
 
 def _malloc_trim() -> None:
@@ -114,6 +127,8 @@ class FatwaRetriever:
 
         self._model: Optional["BGEM3FlagModel"] = None
         self._model_lock = threading.Lock()
+        self._bm25: Optional["BM25Index"] = None
+        self._bm25_lock = threading.Lock()
 
     # --- model lifecycle -----------------------------------------------------
 
@@ -154,18 +169,67 @@ class FatwaRetriever:
         vecs /= np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12
         return vecs  # shape: (1, D)
 
-    def search(self, question: str, top_k: int = 5) -> List[Dict[str, Any]]:
-        mark_activity()
-        query_vec = self.embed(question)[0]  # (D,)
+    @property
+    def bm25(self) -> "BM25Index":
+        """Lexical index, built once on first use (~1s for 18.7k documents).
 
-        scores = score_fatwas(
+        Dense similarity on this corpus is compressed and blurs the exact
+        terminology that Arabic religious text turns on; BM25 recovers it.
+        """
+        if self._bm25 is None:
+            with self._bm25_lock:
+                if self._bm25 is None:
+                    from .lexical import BM25Index
+
+                    docs = (
+                        self.meta["question"].astype(str)
+                        + " "
+                        + self.meta["title"].astype(str)
+                        + " "
+                        + self.meta["answer"].astype(str)
+                    ).tolist()
+                    self._bm25 = BM25Index(docs)
+        return self._bm25
+
+    def _rank(self, question: str, depth: int) -> Tuple[List[int], np.ndarray]:
+        """Return fused candidate row indices (best first) and the dense scores."""
+        query_vec = self.embed(question)[0]
+        dense = score_fatwas(
             query_vec, self.question_emb, self.answer_emb, self.answer_parent
         )
 
-        top_k = max(1, min(top_k, len(scores)))
-        idx_part = np.argpartition(-scores, top_k - 1)[:top_k]
-        idx_sorted = idx_part[np.argsort(-scores[idx_part])]
+        depth = max(1, min(depth, len(dense)))
+        part = np.argpartition(-dense, depth - 1)[:depth]
+        dense_ranked = [int(i) for i in part[np.argsort(-dense[part])]]
 
+        if not USE_HYBRID:
+            return dense_ranked, dense
+
+        lexical_ranked = [i for i, _ in self.bm25.search(question, top_k=depth)]
+        fused = reciprocal_rank_fusion(
+            [dense_ranked, lexical_ranked], weights=[DENSE_WEIGHT, LEXICAL_WEIGHT]
+        )
+        return fused, dense
+
+    def search(self, question: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        mark_activity()
+
+        candidates, dense = self._rank(question, depth=CANDIDATE_DEPTH)
+        top_k = max(1, min(top_k, len(dense)))
+
+        if USE_MMR and len(candidates) > top_k:
+            pool = candidates[: min(len(candidates), MMR_POOL)]
+            idx_sorted = mmr_select(
+                pool,
+                self.question_emb[pool].astype(np.float32),
+                {i: float(dense[i]) for i in pool},
+                top_n=top_k,
+                lam=MMR_LAMBDA,
+            )
+        else:
+            idx_sorted = candidates[:top_k]
+
+        scores = dense
         results = []
         for idx in idx_sorted:
             row = self.meta.iloc[int(idx)]
