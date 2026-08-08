@@ -1,10 +1,16 @@
-"""Compare local GGUF candidates on the two jobs this app actually needs:
-structured JSON gate verdicts, and grounded Arabic generation with [n] citations.
+"""Benchmark local GGUF candidates on the two jobs this app actually needs.
 
-Measures what matters, not perplexity: does it answer in Arabic, does it emit
-valid JSON, does it cite, and how fast."""
+Measures structured JSON gate verdicts and grounded Arabic generation with [n]
+citations — not perplexity. Downloads nothing: it benchmarks whatever GGUF
+files are already in the HF cache.
+"""
+
+import sys
+from pathlib import Path as _Path
+
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
 import glob, json, os, re, sys, time
-sys.path.insert(0, ".")
 from llama_cpp import Llama
 from app.gate import GATE_SYSTEM_PROMPT, build_gate_prompt, parse_gate_response
 from app.llm import SYSTEM_PROMPT, build_derived_prompt
