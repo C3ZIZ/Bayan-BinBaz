@@ -1,0 +1,16 @@
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./tests:/app/tests
+      - ./app:/app/app
+      - ./eval:/app/eval
+      - ./data:/app/data
+      - hf-models:/models
+    environment:
+      OMP_NUM_THREADS: "4"
+
+volumes:
+  hf-models:
