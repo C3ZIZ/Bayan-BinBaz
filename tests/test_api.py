@@ -201,3 +201,31 @@ def test_stream_done_event_carries_resolved_citations(client, monkeypatch):
     events = _events(client.post("/api/chat/stream", json={"question": "س"}).text)
     _, done = events[-1]
     assert done["citations"][0]["id"] == 101
+
+
+def test_llm_failure_returns_503_not_500(client, monkeypatch):
+    """Found by the docker smoke test: when the LLM provider returned
+    402 Payment Required, /api/chat leaked a 500 with a stack trace. The
+    streaming path already handled this; this one did not."""
+    _stub_gate(monkeypatch, GateResult(verdict="derived", cited_ids=[1]))
+
+    def boom(*a, **k):
+        raise RuntimeError("402 Client Error: Payment Required")
+
+    monkeypatch.setattr(api_module, "generate_answer", boom)
+    resp = client.post("/api/chat", json={"question": "س"})
+    assert resp.status_code == 503
+    assert "402" not in resp.text  # provider detail must not leak to clients
+
+
+def test_stream_llm_failure_does_not_leak_provider_detail(client, monkeypatch):
+    _stub_gate(monkeypatch, GateResult(verdict="derived", cited_ids=[1]))
+
+    def boom(*a, **k):
+        raise RuntimeError("402 Payment Required at https://router.hf.co/secret")
+
+    monkeypatch.setattr(api_module, "stream_answer", boom)
+    text = client.post("/api/chat/stream", json={"question": "س"}).text
+    assert "router.hf.co" not in text
+    assert "402" not in text
+    assert "error" in text

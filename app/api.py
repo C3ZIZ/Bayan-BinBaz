@@ -16,7 +16,7 @@ import time
 import traceback
 from typing import Any, Dict, Iterator, List, Tuple
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from .citations import strip_invalid_markers
@@ -100,9 +100,21 @@ def chat(request: ChatRequest) -> ChatResponse:
     started = time.monotonic()
     candidates, gate, sources = _pipeline(request)
 
-    raw = generate_answer(
-        request.question, sources, gate.verdict, gate.premise_issue
-    )
+    try:
+        raw = generate_answer(
+            request.question, sources, gate.verdict, gate.premise_issue
+        )
+    except Exception:
+        # The streaming endpoint already handled this; this path did not, and
+        # returned a 500 with a stack trace when the LLM provider was out of
+        # credits. Surface a clean message and assert no ruling — an upstream
+        # failure must never become an ungrounded answer.
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=503,
+            detail="تعذّر توليد الجواب حاليًا. حاول مرة أخرى بعد قليل.",
+        )
+
     answer, citations = _citations(raw, sources)
 
     log_query(
