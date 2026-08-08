@@ -294,3 +294,118 @@ def test_backend_value_is_case_and_space_insensitive(monkeypatch):
     finally:
         monkeypatch.delenv("LLM_BACKEND", raising=False)
         importlib.reload(reloaded)
+
+
+# --------------- local prompt budget: prefill is the CPU bottleneck ----------
+
+
+SRC = [
+    {"id": i, "question": f"سؤال {i}", "title": f"ع{i}", "answer": "ن " * 400}
+    for i in range(1, 9)
+]
+
+
+def test_local_prompt_is_smaller_than_the_api_prompt(fake_llama, monkeypatch):
+    """Measured: the same local model runs ~4 tok/s on a short prompt but
+    ~1.2 tok/s with ~1600 tokens of fatwa text prepended. The local path must
+    therefore send less, not the same."""
+    llm = _set_mode(monkeypatch, "local")
+    monkeypatch.setattr(llm, "LOCAL_ALLOW_RULINGS", True)
+    list(llm.stream_answer("س", SRC, "derived"))
+
+    sent = fake_llama["chat"][-1]["messages"][-1]["content"]
+    api_sized = llm.build_user_prompt("س", SRC, "derived")
+    assert len(sent) < len(api_sized)
+
+
+def test_local_prompt_caps_the_number_of_sources(fake_llama, monkeypatch):
+    from app import llm_local
+
+    llm = _set_mode(monkeypatch, "local")
+    monkeypatch.setattr(llm, "LOCAL_ALLOW_RULINGS", True)
+    list(llm.stream_answer("س", SRC, "derived"))
+    sent = fake_llama["chat"][-1]["messages"][-1]["content"]
+    assert f"[{llm_local.LOCAL_MAX_SOURCES}]" in sent
+    assert f"[{llm_local.LOCAL_MAX_SOURCES + 1}]" not in sent
+
+
+def test_local_uses_its_own_answer_budget(fake_llama, monkeypatch):
+    from app import llm_local
+
+    llm = _set_mode(monkeypatch, "local")
+    monkeypatch.setattr(llm, "LOCAL_ALLOW_RULINGS", True)
+    list(llm.stream_answer("س", SRC, "derived"))
+    assert fake_llama["chat"][-1]["max_tokens"] == llm_local.LOCAL_MAX_TOKENS
+
+
+def test_fallback_also_uses_the_compact_local_prompt(fake_llama, monkeypatch):
+    """The fallback path must get the same budget as local-only, otherwise an
+    outage produces an answer that never finishes."""
+    llm = _set_mode(monkeypatch, "both")
+    monkeypatch.setattr(llm, "LOCAL_ALLOW_RULINGS", True)
+    _break_api(monkeypatch, llm)
+    list(llm.stream_answer("س", SRC, "derived"))
+    sent = fake_llama["chat"][-1]["messages"][-1]["content"]
+    assert len(sent) < len(llm.build_user_prompt("س", SRC, "derived"))
+
+
+def test_api_prompt_keeps_the_full_budget(fake_llama, monkeypatch):
+    """Only the local model is constrained; the hosted one gets full context."""
+    llm = _set_mode(monkeypatch, "api")
+    full = llm.build_user_prompt("س", SRC, "derived")
+    assert "[8]" in full
+
+
+# ------------- the local model must never assert a ruling --------------------
+
+
+def test_local_does_not_generate_a_ruling(fake_llama, monkeypatch):
+    """Measured on the real app: the 3B model answered «هل اقدر اصلي العشاء ٥
+    ركعات؟» with "permissible" — a fabricated ruling on an obligatory prayer,
+    carrying valid citations. The model must not be asked at all."""
+    llm = _set_mode(monkeypatch, "local")
+    out = "".join(llm.stream_answer("س", SRC[:2], "derived"))
+    assert fake_llama["chat"] == []          # model never invoked
+    assert "تعذّر الوصول إلى النموذج الأساسي" in out
+
+
+def test_local_refusal_still_lists_the_nearest_fatwas(fake_llama, monkeypatch):
+    """Refusing to rule must not mean refusing to help — the user still gets
+    the retrieved fatwas and their links."""
+    llm = _set_mode(monkeypatch, "local")
+    src = [{"id": 1, "title": "حكم الأغاني", "link": "https://binbaz.org.sa/fatwas/1",
+            "question": "س", "answer": "ج"}]
+    out = "".join(llm.stream_answer("س", src, "derived"))
+    assert "حكم الأغاني" in out
+    assert "https://binbaz.org.sa/fatwas/1" in out
+
+
+def test_direct_verdict_is_blocked_locally_too(fake_llama, monkeypatch):
+    llm = _set_mode(monkeypatch, "local")
+    out = "".join(llm.stream_answer("س", SRC[:1], "direct"))
+    assert fake_llama["chat"] == []
+    assert "لن يصدر" in out
+
+
+def test_fallback_to_local_also_refuses_to_rule(fake_llama, monkeypatch):
+    """An API outage must not silently downgrade to fabricated fatwas."""
+    llm = _set_mode(monkeypatch, "both")
+    _break_api(monkeypatch, llm)
+    out = "".join(llm.stream_answer("س", SRC[:2], "derived"))
+    assert fake_llama["chat"] == []
+    assert "تعذّر الوصول" in out
+
+
+def test_abstain_may_still_be_written_locally(fake_llama, monkeypatch):
+    """Abstentions assert no ruling, so the local model is safe to use there."""
+    llm = _set_mode(monkeypatch, "local")
+    out = "".join(llm.stream_answer("س", [], "abstain", "افتراض مستحيل"))
+    assert fake_llama["chat"] != []
+    assert "الحكم" in out
+
+
+def test_override_re_enables_local_rulings(fake_llama, monkeypatch):
+    llm = _set_mode(monkeypatch, "local")
+    monkeypatch.setattr(llm, "LOCAL_ALLOW_RULINGS", True)
+    list(llm.stream_answer("س", SRC[:1], "derived"))
+    assert fake_llama["chat"] != []

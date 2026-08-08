@@ -44,6 +44,11 @@ TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
 # See app/llm_local.py for the benchmark behind the default local model.
 LLM_BACKEND = os.getenv("LLM_BACKEND", "both").strip().lower()
 
+# The local model may run the GATE (it scored 5/5 there) but must not write a
+# ruling: measured, it fabricated "praying Isha as 5 rakʿahs is permissible"
+# from a fatwa about voluntary prayer, complete with valid citations.
+LOCAL_ALLOW_RULINGS = os.getenv("LOCAL_ALLOW_RULINGS", "0") == "1"
+
 _USE_API = LLM_BACKEND in ("api", "both")
 _USE_LOCAL = LLM_BACKEND in ("local", "both")
 _FALLBACK = LLM_BACKEND == "both"
@@ -136,26 +141,41 @@ def _api_chat(system, user, model, max_tokens, temperature) -> str:
 # ---------------------------------------------------------------------------
 
 
-def format_sources(sources: List[Dict[str, Any]]) -> str:
-    """Render the gate-approved fatwas as a numbered list the model cites into."""
+def format_sources(
+    sources: List[Dict[str, Any]], max_chars: int = None, max_sources: int = None
+) -> str:
+    """Render the gate-approved fatwas as a numbered list the model cites into.
+
+    The budget is adjustable because prompt PREFILL dominates cost on a CPU
+    local model: measured, the same model runs ~4 tok/s on a short prompt but
+    ~1.2 tok/s once ~1600 tokens of fatwa text are prepended.
+    """
+    limit = MAX_ANSWER_CHARS if max_chars is None else max_chars
+    if max_sources is not None:
+        sources = sources[:max_sources]
     blocks = []
     for i, s in enumerate(sources, start=1):
         blocks.append(
             f"[{i}]\n"
             f"السؤال: {(s.get('question') or '').strip()}\n"
-            f"جواب الشيخ: {truncate_at_sentence(s.get('answer') or '', MAX_ANSWER_CHARS)}"
+            f"جواب الشيخ: {truncate_at_sentence(s.get('answer') or '', limit)}"
         )
     return "\n\n".join(blocks)
 
 
-def build_direct_prompt(question: str, sources: List[Dict[str, Any]]) -> str:
+def build_direct_prompt(
+    question: str,
+    sources: List[Dict[str, Any]],
+    max_chars: int = None,
+    max_sources: int = None,
+) -> str:
     return f"""
 سؤال المستخدم:
 {question}
 
 فتاوى الشيخ ابن باز المتعلقة بالسؤال:
 
-{format_sources(sources)}
+{format_sources(sources, max_chars, max_sources)}
 
 المطلوب:
 - اعرض الحكم كما قرره الشيخ، بلغة واضحة مبسطة، دون تغيير المعنى.
@@ -166,7 +186,12 @@ def build_direct_prompt(question: str, sources: List[Dict[str, Any]]) -> str:
 """.strip()
 
 
-def build_derived_prompt(question: str, sources: List[Dict[str, Any]]) -> str:
+def build_derived_prompt(
+    question: str,
+    sources: List[Dict[str, Any]],
+    max_chars: int = None,
+    max_sources: int = None,
+) -> str:
     """The common case. The structural separation demanded here is what keeps a
     derived application from being read as a direct ruling by the shaykh."""
     return f"""
@@ -175,7 +200,7 @@ def build_derived_prompt(question: str, sources: List[Dict[str, Any]]) -> str:
 
 لا توجد فتوى للشيخ ابن باز على هذه الحالة بعينها، لكن الفتاوى الآتية تتناول أصل المسألة:
 
-{format_sources(sources)}
+{format_sources(sources, max_chars, max_sources)}
 
 المطلوب، والتزم هذا الترتيب:
 1. ابدأ بجملة تُوضّح أنه لا توجد فتوى على هذه الحالة بعينها.
@@ -225,11 +250,13 @@ def build_user_prompt(
     sources: List[Dict[str, Any]],
     verdict: str,
     premise_issue: str = "",
+    max_chars: int = None,
+    max_sources: int = None,
 ) -> str:
     if verdict == "direct":
-        return build_direct_prompt(question, sources)
+        return build_direct_prompt(question, sources, max_chars, max_sources)
     if verdict == "derived":
-        return build_derived_prompt(question, sources)
+        return build_derived_prompt(question, sources, max_chars, max_sources)
     return build_abstain_prompt(question, premise_issue)
 
 
@@ -251,8 +278,48 @@ def stream_answer(
     """
     user_prompt = build_user_prompt(question, sources, verdict, premise_issue)
 
+    def local_refusal() -> Iterator[str]:
+        """What the local model is allowed to say about a ruling: nothing.
+
+        Measured on the real app, the 3B local model answered «هل اقدر اصلي
+        العشاء ٥ ركعات؟» with "yes, permissible" — a fabricated ruling on an
+        obligatory prayer, derived by misapplying a fatwa about VOLUNTARY
+        prayer, and delivered with valid citations. The citation validator
+        cannot catch that: the markers are real, the inference is false.
+
+        So when the hosted model is unavailable, the system reports that and
+        points at the retrieved fatwas instead of ruling from a small model.
+        Set LOCAL_ALLOW_RULINGS=1 to override, knowing the above.
+        """
+        yield (
+            "تعذّر الوصول إلى النموذج الأساسي حاليًا، ولذلك لن يصدر هذا النظام "
+            "حكمًا شرعيًا الآن؛ فالنموذج الاحتياطي المحلي أصغر من أن يُعتمد عليه "
+            "في الفتوى.\n\n"
+        )
+        if sources:
+            yield "وهذه أقرب فتاوى الشيخ ابن باز صلةً بسؤالك، وفيها الجواب بإذن الله:\n"
+            for i, src in enumerate(sources, start=1):
+                title = (src.get("title") or src.get("question") or "فتوى").strip()
+                yield f"\n{i}. {title}\n{src.get('link', '')}\n"
+            yield "\nراجعها مباشرة، أو أعد المحاولة بعد قليل.\n"
+        else:
+            yield "أعد المحاولة بعد قليل، أو اسأل أهل العلم مباشرة.\n"
+
+    def local_prompt() -> str:
+        """A tighter prompt for the local model — prefill is its dominant cost."""
+        from . import llm_local
+
+        return build_user_prompt(
+            question, sources, verdict, premise_issue,
+            max_chars=llm_local.LOCAL_CONTEXT_CHARS,
+            max_sources=llm_local.LOCAL_MAX_SOURCES,
+        )
+
     if _USE_LOCAL and not _USE_API:
-        yield from _local_stream(user_prompt)
+        if verdict in ("direct", "derived") and not LOCAL_ALLOW_RULINGS:
+            yield from local_refusal()
+            return
+        yield from _local_stream(local_prompt())
         return
 
     # Fallback is only safe BEFORE the first token reaches the client: once text
@@ -267,14 +334,18 @@ def stream_answer(
         if emitted or not _FALLBACK:
             raise
         print(f"[llm] API failed ({type(exc).__name__}: {exc}); falling back to local.")
-        yield from _local_stream(user_prompt)
+        if verdict in ("direct", "derived") and not LOCAL_ALLOW_RULINGS:
+            yield from local_refusal()
+            return
+        yield from _local_stream(local_prompt())
 
 
 def _local_stream(user_prompt: str) -> Iterator[str]:
     from . import llm_local
 
     yield from llm_local.stream_completion(
-        SYSTEM_PROMPT, user_prompt, max_tokens=MAX_TOKENS, temperature=TEMPERATURE
+        SYSTEM_PROMPT, user_prompt,
+        max_tokens=llm_local.LOCAL_MAX_TOKENS, temperature=TEMPERATURE,
     )
 
 

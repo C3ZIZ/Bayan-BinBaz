@@ -23,6 +23,7 @@ from .citations import strip_invalid_markers
 from .gate import GateResult, run_gate
 from .llm import generate_answer, stream_answer
 from .observability import log_query
+from .question_split import split_questions
 from .retrieval import get_retriever
 from .schemas import ChatRequest, ChatResponse, Citation, FatwaHit
 
@@ -72,9 +73,25 @@ def _pipeline(request: ChatRequest) -> Tuple[List[Dict], GateResult, List[Dict]]
     Returns (candidates, gate result, gate-approved sources in citation order).
     """
     retriever = get_retriever()
-    candidates = retriever.search(
-        request.question, top_k=max(GATE_CANDIDATES, request.top_k)
-    )
+    depth = max(GATE_CANDIDATES, request.top_k)
+
+    # A multi-part question averages into one vector that matches none of its
+    # parts — measured: «حكم اكل الخنزير، كمان كم ركعات المغرب؟ وهل …» retrieved
+    # neither pork nor rakʿah-count fatwas, while each part retrieved correctly
+    # on its own. Retrieve per part and merge, preserving best-first order.
+    parts = split_questions(request.question)
+    if len(parts) > 1:
+        per_part = max(3, depth // len(parts))
+        seen, candidates = set(), []
+        for part in parts:
+            for hit in retriever.search(part, top_k=per_part):
+                if hit["id"] not in seen:
+                    seen.add(hit["id"])
+                    candidates.append(hit)
+        candidates.sort(key=lambda h: -h["similarity"])
+        candidates = candidates[:depth]
+    else:
+        candidates = retriever.search(request.question, top_k=depth)
     gate = run_gate(request.question, candidates)
     sources = [candidates[n - 1] for n in gate.cited_ids] if gate.should_answer else []
     return candidates, gate, sources

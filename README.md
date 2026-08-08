@@ -31,6 +31,8 @@ question
   ↓
 normalize        strip tashkeel, fold alef/alef-maqsura, unify digits
   ↓
+split            multi-part questions → one retrieval per part, merged
+  ↓
 retrieve         dense (BGE-M3, two-field) + BM25 → RRF → MMR
   ↓
 GATE             one structured LLM call: is this answerable, and from which fatwas?
@@ -75,14 +77,28 @@ The fallback only engages **before the first token reaches the client** — text
 already streamed cannot be retracted, and continuing from a different model would
 splice two answers together.
 
+**The local model runs the gate but never writes a ruling.** Measured on the real
+app, the 3B model answered «هل اقدر اصلي العشاء ٥ ركعات؟» with *"permissible"* — a
+fabricated ruling on an obligatory prayer, reached by misapplying a fatwa about
+*voluntary* prayer, and carrying **valid citations**. The citation validator cannot
+catch that: the markers are real, the inference is false. So when the hosted model
+is unavailable the app says so and lists the retrieved fatwas with links.
+`LOCAL_ALLOW_RULINGS=1` overrides this.
+
+Speed, measured in Docker on CPU: **~1–4 tok/s**, with prompt prefill dominating.
+(An earlier 22 tok/s figure came from a native Metal-accelerated build on macOS and
+does not apply to a CPU deployment.)
+
 The local default is **Falcon-H1-3B-Instruct**, chosen by benchmarking the two
 jobs this app actually does rather than by leaderboard:
 
 | model | gate correct | Arabic | cites | speed | size |
 |-------|--------------|--------|-------|-------|------|
-| **Falcon-H1-3B (TII)** | **3/3** | 100% | ✅ | 22 tok/s | 1.9 GB |
-| Qwen2.5-3B | 2/3 | 100% | ✅ | 27 tok/s | 2.1 GB |
-| ALLaM-7B (SDAIA) | 2/3 | 100% | ✅ | 12 tok/s | 4.3 GB |
+| **Falcon-H1-3B (TII)** | **3/3** | 100% | ✅ | 22 tok/s* | 1.9 GB |
+| Qwen2.5-3B | 2/3 | 100% | ✅ | 27 tok/s* | 2.1 GB |
+| ALLaM-7B (SDAIA) | 2/3 | 100% | ✅ | 12 tok/s* | 4.3 GB |
+
+\* native macOS/Metal. On CPU in Docker expect ~1–4 tok/s.
 
 ALLaM is Arabic-native and twice the size, yet scored no better on the gate, ran
 at half the speed, and echoed source blocks instead of answering — bigger and

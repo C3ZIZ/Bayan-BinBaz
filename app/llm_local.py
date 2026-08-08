@@ -32,6 +32,15 @@ LOCAL_LLM_REPO = os.getenv("LOCAL_LLM_REPO", "tiiuae/Falcon-H1-3B-Instruct-GGUF"
 LOCAL_LLM_FILE = os.getenv("LOCAL_LLM_FILE", "Falcon-H1-3B-Instruct-Q4_K_M.gguf")
 LOCAL_LLM_CTX = int(os.getenv("LOCAL_LLM_CTX", "4096"))
 LOCAL_LLM_THREADS = int(os.getenv("LOCAL_LLM_THREADS", str(os.cpu_count() or 4)))
+
+# CPU generation is slow and PREFILL dominates: measured in Docker, the same
+# model runs ~4 tok/s on a short prompt but ~1.2 tok/s once ~1600 tokens of
+# fatwa text are prepended. So the local path gets a tighter prompt and a
+# smaller answer budget than the hosted model — an answer that arrives is worth
+# more than a longer one that times out.
+LOCAL_CONTEXT_CHARS = int(os.getenv("LOCAL_CONTEXT_CHARS", "450"))
+LOCAL_MAX_SOURCES = int(os.getenv("LOCAL_MAX_SOURCES", "3"))
+LOCAL_MAX_TOKENS = int(os.getenv("LOCAL_MAX_TOKENS", "350"))
 # Free the embedder before generating. Needed on ~4GB hosts where the embedder
 # and the LLM cannot both be resident.
 UNLOAD_EMBEDDER = os.getenv("LOCAL_UNLOAD_EMBEDDER", "0") == "1"
