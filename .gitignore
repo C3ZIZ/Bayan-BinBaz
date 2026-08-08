@@ -15,3 +15,4 @@ models/
 
 # NOTE: data/ (raw CSV, processed parquet, and the prebuilt index) IS committed on
 # purpose so the app ships ready-to-run. Do not re-add data/raw/ or *.csv here.
+data/.index_cache/

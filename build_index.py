@@ -16,8 +16,11 @@ Vectors are L2-normalized and stored float16, halving the on-disk index with
 negligible recall loss — it lives in git, so size matters.
 """
 
+import gc
 import json
 import os
+import shutil
+import time
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +32,9 @@ from app.normalize import NORMALIZE_VERSION, normalize_arabic
 
 PROCESSED_PATH = Path("data/processed/fatwas.parquet")
 INDEX_DIR = Path("data/index")
+# Shard checkpoints live outside data/index so a partial build never looks
+# like a usable index to the app or to git.
+CACHE_DIR = Path("data/.index_cache")
 
 EMB_MODEL = "BAAI/bge-m3"
 CHUNK_MAX_TOKENS = 450
@@ -46,14 +52,52 @@ BATCH_SIZE = int(os.getenv("BUILD_BATCH_SIZE", "32"))
 # dense retrieval matches question-to-question (which is what the corpus
 # asymmetry called for anyway) and BM25 covers the answer text lexically.
 BUILD_ANSWER_INDEX = os.getenv("BUILD_ANSWER_INDEX", "1") == "1"
+SHARD_SIZE = int(os.getenv("BUILD_SHARD_SIZE", "1024"))
 
 
 def _encode(model, texts, label):
-    print(f"Encoding {len(texts)} {label}...", flush=True)
-    out = model.encode(texts, batch_size=BATCH_SIZE, max_length=MAX_LENGTH)
-    vecs = out["dense_vecs"].astype("float32")
-    vecs /= np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12
-    return vecs.astype(np.float16)
+    """Encode in checkpointed shards.
+
+    Encoding the whole corpus in one call is a ~2 hour operation whose partial
+    work is unrecoverable: a single OOM or container restart loses everything.
+    Each shard is written to CACHE_DIR as it completes and reused on a rerun, so
+    a crash costs one shard rather than the whole build.
+    """
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    total = len(texts)
+    n_shards = (total + SHARD_SIZE - 1) // SHARD_SIZE
+    print(f"Encoding {total} {label} in {n_shards} shards of {SHARD_SIZE}...", flush=True)
+
+    parts = []
+    for shard in range(n_shards):
+        path = CACHE_DIR / f"{label}_{shard:05d}.npy"
+        if path.exists():
+            parts.append(np.load(path))
+            print(f"  [{shard + 1}/{n_shards}] cached", flush=True)
+            continue
+
+        chunk = texts[shard * SHARD_SIZE : (shard + 1) * SHARD_SIZE]
+        started = time.time()
+        out = model.encode(chunk, batch_size=BATCH_SIZE, max_length=MAX_LENGTH)
+        vecs = out["dense_vecs"].astype("float32")
+        vecs /= np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12
+        vecs = vecs.astype(np.float16)
+
+        np.save(path, vecs)
+        parts.append(vecs)
+        del out
+        gc.collect()
+
+        elapsed = time.time() - started
+        done = shard + 1
+        eta = elapsed * (n_shards - done) / 60
+        print(
+            f"  [{done}/{n_shards}] {len(chunk)} in {elapsed:.0f}s "
+            f"({len(chunk) / elapsed:.1f}/s) — ETA {eta:.0f} min",
+            flush=True,
+        )
+
+    return np.vstack(parts) if parts else np.zeros((0, 1024), dtype=np.float16)
 
 
 def main():
@@ -124,6 +168,8 @@ def main():
         encoding="utf-8",
     )
 
+    # Only clear the checkpoints once every artifact is safely written.
+    shutil.rmtree(CACHE_DIR, ignore_errors=True)
     print(f"Done. {len(question_emb)} fatwas, {len(answer_emb)} chunks.")
 
 
