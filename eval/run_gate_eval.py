@@ -24,6 +24,7 @@ sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
 import argparse
 import json
 import os
+import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -36,6 +37,9 @@ DERIVED = Path("eval/datasets/derived.jsonl")
 ADVERSARIAL = Path("eval/datasets/adversarial.jsonl")
 RESULTS_DIR = Path("eval/results")
 GATE_CANDIDATES = 8
+RETRIES = int(os.getenv("EVAL_GATE_RETRIES", "5"))
+BACKOFF_BASE = float(os.getenv("EVAL_GATE_BACKOFF", "4"))
+PACING = float(os.getenv("EVAL_GATE_PACING", "1.5"))
 
 
 def load(path: Path, limit: int = 0) -> List[Dict]:
@@ -61,7 +65,16 @@ def evaluate(rows: List[Dict], workers: int) -> List[Dict]:
 
     def judge(item):
         row, hits = item
-        gate = run_gate(row["query"], hits)
+        # The gate itself fails closed immediately — correct in production, but
+        # useless for measurement: a throttled run scores 100% abstention while
+        # having judged nothing. The EVAL therefore retries with backoff so the
+        # numbers reflect the gate's decisions, not the provider's quota.
+        gate = None
+        for attempt in range(RETRIES):
+            gate = run_gate(row["query"], hits)
+            if not gate.failed_closed:
+                break
+            time.sleep(BACKOFF_BASE * (2**attempt))
         retrieved_ids = [h["id"] for h in hits]
         supporting = set(row.get("supporting_ids") or [])
         return {
@@ -76,6 +89,15 @@ def evaluate(rows: List[Dict], workers: int) -> List[Dict]:
             "reason": gate.reason,
             "support_retrieved": bool(supporting & set(retrieved_ids)) if supporting else None,
         }
+
+    if workers <= 1:
+        out = []
+        for i, item in enumerate(prepared, 1):
+            out.append(judge(item))
+            if i % 10 == 0:
+                print(f"  judged {i}/{len(prepared)}", flush=True)
+            time.sleep(PACING)
+        return out
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         return list(pool.map(judge, prepared))
