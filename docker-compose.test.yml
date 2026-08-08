@@ -3,11 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.test
+    # Mount the repo root so edits to top-level scripts (prepare_data.py,
+    # build_index.py) are picked up without rebuilding the image. Dependencies
+    # live in site-packages, so nothing installed is shadowed.
     volumes:
-      - ./tests:/app/tests
-      - ./app:/app/app
-      - ./eval:/app/eval
-      - ./data:/app/data
+      - .:/app
       - hf-models:/models
     environment:
       OMP_NUM_THREADS: "4"
