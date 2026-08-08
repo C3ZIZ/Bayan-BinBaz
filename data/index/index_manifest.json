@@ -1,0 +1,11 @@
+{
+  "normalize_version": "1.0",
+  "emb_model": "BAAI/bge-m3",
+  "max_length": 512,
+  "chunk_max_tokens": 450,
+  "chunk_overlap": 100,
+  "n_fatwas": 18681,
+  "n_chunks": 0,
+  "dtype": "float16",
+  "has_answer_index": false
+}

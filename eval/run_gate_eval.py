@@ -13,6 +13,14 @@ Both numbers must be reported together. A high abstention rate is only good news
 if the false-abstention rate stayed low.
 """
 
+import sys
+from pathlib import Path as _Path
+
+# Entry-point scripts are run directly (python eval/x.py), so the repo
+# root is not on sys.path by default.
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
+
 import argparse
 import json
 import os

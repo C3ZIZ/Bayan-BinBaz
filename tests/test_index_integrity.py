@@ -41,7 +41,10 @@ def test_parent_map_matches_answer_rows(artifacts):
 
 
 def test_parent_indices_are_in_range(artifacts):
-    _, _, parent, meta, _ = artifacts
+    _, _, parent, meta, manifest = artifacts
+    if not manifest.get("has_answer_index", True):
+        pytest.skip("answer index not built (BUILD_ANSWER_INDEX=0)")
+    # .min()/.max() raise on a zero-length array, hence the guard above.
     assert parent.min() >= 0
     assert parent.max() < len(meta)
 

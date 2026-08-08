@@ -21,6 +21,14 @@ Three kinds, 20 each:
   application — applying the ruling to the asker's concrete situation
 """
 
+import sys
+from pathlib import Path as _Path
+
+# Entry-point scripts are run directly (python eval/x.py), so the repo
+# root is not on sys.path by default.
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
+
 import json
 from pathlib import Path
 

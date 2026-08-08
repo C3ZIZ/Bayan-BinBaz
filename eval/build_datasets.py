@@ -14,6 +14,14 @@ Disjoint fatwas are used for the two slices so a paraphrase never competes with
 its own verbatim twin.
 """
 
+import sys
+from pathlib import Path as _Path
+
+# Entry-point scripts are run directly (python eval/x.py), so the repo
+# root is not on sys.path by default.
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
+
 import json
 import re
 from pathlib import Path
