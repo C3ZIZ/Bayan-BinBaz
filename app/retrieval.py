@@ -219,10 +219,14 @@ class FatwaRetriever:
 
         if USE_MMR and len(candidates) > top_k:
             pool = candidates[: min(len(candidates), MMR_POOL)]
+            # Relevance must come from the FUSED rank, not the raw dense score.
+            # Using dense here would let RRF pick the pool and then have its
+            # ordering thrown away, making the lexical weights inert.
+            relevance = {doc: 1.0 / (rank + 1) for rank, doc in enumerate(pool)}
             idx_sorted = mmr_select(
                 pool,
                 self.question_emb[pool].astype(np.float32),
-                {i: float(dense[i]) for i in pool},
+                relevance,
                 top_n=top_k,
                 lam=MMR_LAMBDA,
             )

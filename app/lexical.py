@@ -45,14 +45,27 @@ class BM25Index:
         self.b = b
         self.n_docs = len(documents)
 
-        self._postings: Dict[str, List[Tuple[int, int]]] = {}
+        raw: Dict[str, List[Tuple[int, int]]] = {}
         doc_lengths = np.zeros(self.n_docs, dtype=np.float32)
 
         for doc_idx, doc in enumerate(documents):
             terms = tokenize(doc)
             doc_lengths[doc_idx] = len(terms)
             for term, freq in Counter(terms).items():
-                self._postings.setdefault(term, []).append((doc_idx, freq))
+                raw.setdefault(term, []).append((doc_idx, freq))
+
+        # Convert postings to NumPy arrays. As Python tuples this is ~1.9M
+        # objects over the full corpus — a few hundred MB held permanently,
+        # against a ~4GB box that also loads a 2.3GB embedder. As int32/float32
+        # arrays it is ~15MB.
+        self._postings: Dict[str, Tuple[np.ndarray, np.ndarray]] = {
+            term: (
+                np.fromiter((d for d, _ in post), dtype=np.int32, count=len(post)),
+                np.fromiter((f for _, f in post), dtype=np.float32, count=len(post)),
+            )
+            for term, post in raw.items()
+        }
+        del raw
 
         self.doc_lengths = doc_lengths
         self.avg_doc_length = float(doc_lengths.mean()) if self.n_docs else 0.0
@@ -60,8 +73,8 @@ class BM25Index:
         # Standard BM25 idf with the +1 guard so a term present in every
         # document scores 0 rather than going negative.
         self._idf: Dict[str, float] = {
-            term: math.log(1.0 + (self.n_docs - len(post) + 0.5) / (len(post) + 0.5))
-            for term, post in self._postings.items()
+            term: math.log(1.0 + (self.n_docs - len(idx) + 0.5) / (len(idx) + 0.5))
+            for term, (idx, _) in self._postings.items()
         }
 
     def score_all(self, query: str) -> np.ndarray:
@@ -71,14 +84,15 @@ class BM25Index:
             return scores
 
         for term in tokenize(query):
-            postings = self._postings.get(term)
-            if not postings:
+            posting = self._postings.get(term)
+            if posting is None:
                 continue
+            idx, tf = posting
             idf = self._idf[term]
-            idx = np.fromiter((d for d, _ in postings), dtype=np.int64, count=len(postings))
-            tf = np.fromiter((f for _, f in postings), dtype=np.float32, count=len(postings))
             norm = 1.0 - self.b + self.b * (self.doc_lengths[idx] / self.avg_doc_length)
-            scores[idx] += idf * (tf * (self.k1 + 1.0)) / (tf + self.k1 * norm)
+            # np.add.at, not +=, so a term repeated in the query accumulates
+            # correctly rather than being overwritten by fancy-index assignment.
+            np.add.at(scores, idx, idf * (tf * (self.k1 + 1.0)) / (tf + self.k1 * norm))
 
         return scores
 

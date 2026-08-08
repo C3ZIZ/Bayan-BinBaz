@@ -89,6 +89,33 @@ def build_gate_prompt(question: str, hits: List[Dict[str, Any]]) -> str:
     )
 
 
+_TRUTHY = {"true", "yes", "1"}
+_FALSY = {"false", "no", "0"}
+
+
+def _coerce_premise_sound(value: Any) -> bool:
+    """Interpret the gate's ``premise_sound`` field, failing CLOSED.
+
+    A missing field means the gate saw nothing wrong, so the premise is sound.
+    But a *present* value that is not recognisably true — the string "false",
+    0, None, an object — must not be silently upgraded to True: that is exactly
+    how the impossible Hajj/Ramadan question would get answered.
+    """
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in _TRUTHY:
+            return True
+        if text in _FALSY:
+            return False
+    return False
+
+
 def _extract_json(raw: str) -> Optional[Dict[str, Any]]:
     """Pull the first JSON object out of a model response, tolerating code
     fences and surrounding prose."""
@@ -122,8 +149,7 @@ def parse_gate_response(raw: str, n_candidates: int) -> GateResult:
         return GateResult(verdict="abstain", reason=f"unknown verdict {verdict!r}",
                           failed_closed=True)
 
-    premise_sound = data.get("premise_sound", True)
-    premise_sound = bool(premise_sound) if isinstance(premise_sound, bool) else True
+    premise_sound = _coerce_premise_sound(data.get("premise_sound"))
     premise_issue = str(data.get("premise_issue") or "").strip()
 
     # Keep only ids the gate was actually shown; a hallucinated source is worse
@@ -144,9 +170,12 @@ def parse_gate_response(raw: str, n_candidates: int) -> GateResult:
         )
 
     if verdict in ("direct", "derived") and not cited:
+        # Flagged as a closed failure so it shows up in the gate metrics rather
+        # than looking like a considered abstention.
         return GateResult(
             verdict="abstain",
             reason="verdict claimed an answer but cited no usable fatwa",
+            failed_closed=True,
         )
 
     return GateResult(

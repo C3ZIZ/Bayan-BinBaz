@@ -20,20 +20,29 @@ class RateLimiter:
         max_requests: int,
         window_seconds: float,
         clock: Callable[[], float] = time.monotonic,
+        prune_threshold: int = 10_000,
     ):
         if max_requests <= 0:
             raise ValueError("max_requests must be positive")
         if window_seconds <= 0:
             raise ValueError("window_seconds must be positive")
+        if prune_threshold <= 0:
+            raise ValueError("prune_threshold must be positive")
 
         self.max_requests = max_requests
         self.window_seconds = window_seconds
+        self.prune_threshold = prune_threshold
         self._clock = clock
         self._lock = threading.Lock()
         self._windows: Dict[str, Tuple[float, int]] = {}
 
     def check(self, key: str) -> Tuple[bool, float]:
         """Return ``(allowed, retry_after_seconds)``."""
+        # Self-prune: without this the map grows for every distinct key ever
+        # seen, which is an unbounded-memory path in a long-lived process.
+        if len(self._windows) >= self.prune_threshold:
+            self.prune()
+
         now = self._clock()
         with self._lock:
             started, count = self._windows.get(key, (now, 0))

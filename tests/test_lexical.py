@@ -69,3 +69,23 @@ def test_empty_query_is_safe():
 def test_rejects_negative_top_k():
     with pytest.raises(ValueError):
         _index().search("حكم", top_k=0)
+
+
+def test_repeated_query_term_accumulates_score():
+    """Fancy-index `+=` silently drops duplicates; np.add.at must be used."""
+    idx = _index()
+    once = idx.search("الأغاني", top_k=1)[0][1]
+    twice = idx.search("الأغاني الأغاني", top_k=1)[0][1]
+    assert twice > once
+
+
+def test_postings_are_numpy_arrays_not_tuples():
+    """Python tuples over the full corpus cost hundreds of MB on a ~4GB box."""
+    import numpy as np
+
+    idx = _index()
+    # Postings are keyed by the NORMALIZED term (alef folded), not the raw one.
+    term = tokenize("الأغاني")[0]
+    doc_ids, freqs = idx._postings[term]
+    assert isinstance(doc_ids, np.ndarray) and isinstance(freqs, np.ndarray)
+    assert doc_ids.dtype == np.int32

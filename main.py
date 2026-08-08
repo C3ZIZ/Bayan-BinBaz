@@ -52,14 +52,26 @@ _limiter = RateLimiter(
 _RATE_LIMITED_PREFIX = "/api/"
 
 
+# X-Forwarded-For is client-supplied: trusting it unconditionally lets anyone
+# rotate the header and get a fresh window per request, which defeats the limit
+# entirely. Only honour it when a trusted proxy actually sits in front (Coolify,
+# nginx), which the operator asserts via TRUST_PROXY_HEADER=1.
+_TRUST_PROXY = os.getenv("TRUST_PROXY_HEADER", "0") == "1"
+
+
+def _client_key(request: Request) -> str:
+    if _TRUST_PROXY:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first
+    return request.client.host if request.client else "unknown"
+
+
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
     if request.url.path.startswith(_RATE_LIMITED_PREFIX):
-        client = request.headers.get("x-forwarded-for", "")
-        client = client.split(",")[0].strip() or (
-            request.client.host if request.client else "unknown"
-        )
-        allowed, retry_after = _limiter.check(client)
+        allowed, retry_after = _limiter.check(_client_key(request))
         if not allowed:
             return JSONResponse(
                 status_code=429,

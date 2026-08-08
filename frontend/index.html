@@ -682,12 +682,25 @@
       // Render answer text, turning [n] markers into links to the cited fatwa.
       // Built with createElement/textContent only — never innerHTML — so fatwa
       // titles and model output can never inject markup.
+      // Map marker number -> source. Never index positionally: the `done` event
+      // sends citations ordered by first appearance, so if the model writes [2]
+      // before [1] a positional lookup links each marker to the WRONG fatwa —
+      // the misattribution this whole design exists to prevent.
+      function markerMap(list) {
+        const map = new Map();
+        (list || []).forEach((s, i) => {
+          map.set(Number(s.marker != null ? s.marker : i + 1), s);
+        });
+        return map;
+      }
+
       function renderAnswer(container, text, sources) {
         container.textContent = "";
+        const byMarker = markerMap(sources);
         const parts = text.split(/(\[\d+\])/g);
         parts.forEach((part) => {
           const m = /^\[(\d+)\]$/.exec(part);
-          const source = m ? sources[Number(m[1]) - 1] : null;
+          const source = m ? byMarker.get(Number(m[1])) : null;
           if (source && source.link) {
             const a = document.createElement("a");
             a.className = "cite-link";
@@ -735,7 +748,8 @@
         list.forEach((f, idx) => {
           const line = document.createElement("div");
           const label = document.createElement("span");
-          label.textContent = (sources && sources.length ? f.marker : idx + 1) + ". ";
+          label.textContent =
+            (f.marker != null ? f.marker : idx + 1) + ". ";
           line.appendChild(label);
 
           if (f.link) {

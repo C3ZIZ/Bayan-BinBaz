@@ -167,3 +167,51 @@ def test_prompt_truncates_long_answers():
 def test_gate_result_should_answer_requires_citations():
     assert not GateResult(verdict="derived", cited_ids=[]).should_answer
     assert GateResult(verdict="derived", cited_ids=[1]).should_answer
+
+
+# ------------------------------------- regressions from the code review
+
+
+def test_string_false_premise_is_not_upgraded_to_true():
+    """A gate reply of {"premise_sound": "false"} must abstain. Coercing any
+    non-boolean to True made this module fail OPEN — answering exactly the
+    impossible question it exists to catch."""
+    r = parse_gate_response(
+        _raw(verdict="derived", premise_sound="false", cited_ids=[1]), n_candidates=2
+    )
+    assert r.verdict == "abstain"
+    assert r.premise_sound is False
+
+
+def test_unrecognised_premise_value_fails_closed():
+    for bad in ({}, [], "maybe", "غير معروف"):
+        r = parse_gate_response(
+            _raw(verdict="derived", premise_sound=bad, cited_ids=[1]), 2
+        )
+        assert r.verdict == "abstain", bad
+
+
+def test_missing_premise_field_defaults_to_sound():
+    payload = json.loads(_raw())
+    del payload["premise_sound"]
+    r = parse_gate_response(json.dumps(payload, ensure_ascii=False), 2)
+    assert r.premise_sound is True
+    assert r.verdict == "derived"
+
+
+def test_numeric_zero_premise_is_false():
+    r = parse_gate_response(_raw(premise_sound=0, cited_ids=[1]), 2)
+    assert r.verdict == "abstain"
+
+
+def test_string_true_premise_is_accepted():
+    r = parse_gate_response(_raw(premise_sound="true", cited_ids=[1]), 2)
+    assert r.premise_sound is True
+    assert r.verdict == "derived"
+
+
+def test_cited_nothing_abstention_is_flagged_as_failed_closed():
+    """Otherwise it looks like a considered abstention in the gate metrics."""
+    r = parse_gate_response(_raw(verdict="direct", cited_ids=[]), 2)
+    assert r.verdict == "abstain"
+    assert r.failed_closed is True

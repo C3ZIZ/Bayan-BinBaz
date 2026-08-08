@@ -69,3 +69,20 @@ def test_rejects_invalid_configuration():
         RateLimiter(0, 60)
     with pytest.raises(ValueError):
         RateLimiter(5, 0)
+
+
+def test_windows_map_is_pruned_automatically():
+    """Without self-pruning the map grows for every distinct key ever seen."""
+    clock = Clock()
+    limiter = RateLimiter(5, 60, clock=clock, prune_threshold=10)
+    for i in range(10):
+        limiter.check(f"client-{i}")
+    assert len(limiter._windows) == 10
+    clock.advance(61)
+    limiter.check("trigger")          # crosses the threshold -> prunes expired
+    assert len(limiter._windows) == 1
+
+
+def test_rejects_invalid_prune_threshold():
+    with pytest.raises(ValueError):
+        RateLimiter(5, 60, prune_threshold=0)

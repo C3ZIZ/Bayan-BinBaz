@@ -13,6 +13,7 @@ answer's citations honest.
 
 import json
 import time
+import traceback
 from typing import Any, Dict, Iterator, List, Tuple
 
 from fastapi import APIRouter
@@ -63,7 +64,9 @@ def _pipeline(request: ChatRequest) -> Tuple[List[Dict], GateResult, List[Dict]]
     Returns (candidates, gate result, gate-approved sources in citation order).
     """
     retriever = get_retriever()
-    candidates = retriever.search(request.question, top_k=GATE_CANDIDATES)
+    candidates = retriever.search(
+        request.question, top_k=max(GATE_CANDIDATES, request.top_k)
+    )
     gate = run_gate(request.question, candidates)
     sources = [candidates[n - 1] for n in gate.cited_ids] if gate.should_answer else []
     return candidates, gate, sources
@@ -83,13 +86,13 @@ def _citations(text: str, sources: List[Dict[str, Any]]) -> Tuple[str, List[Cita
     ]
 
 
-def _related(candidates: List[Dict], gate: GateResult) -> List[FatwaHit]:
+def _related(candidates: List[Dict], gate: GateResult, top_k: int) -> List[FatwaHit]:
     """Show related fatwas only when the system actually stands behind them.
     Listing 'closest fatwas' under an abstention invites the user to read a
     ruling the system just declined to give."""
     if gate.verdict == "abstain":
         return []
-    return [_to_hit(h) for h in candidates[:5]]
+    return [_to_hit(h) for h in candidates[:top_k]]
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -120,7 +123,7 @@ def chat(request: ChatRequest) -> ChatResponse:
         answer=_headline(gate) + "\n\n" + answer,
         similarity=candidates[0]["similarity"] if candidates else 0.0,
         citations=citations,
-        related_fatwas=_related(candidates, gate),
+        related_fatwas=_related(candidates, gate, request.top_k),
     )
 
 
@@ -159,8 +162,9 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
                     {"marker": i, "id": s["id"], "title": s["title"], "link": s["link"]}
                     for i, s in enumerate(sources, start=1)
                 ],
-                "related_fatwas": [_to_hit(h).model_dump() for h in
-                                   ([] if gate.verdict == "abstain" else candidates[:5])],
+                "related_fatwas": [
+                    h.model_dump() for h in _related(candidates, gate, request.top_k)
+                ],
             })
 
             parts: List[str] = []
@@ -184,8 +188,12 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
                 extra={"streamed": True},
             )
 
-        except Exception as e:  # surface a clean error to the client
-            yield _sse("error", {"message": str(e)})
+        except Exception:
+            # Never stream the exception text: it can carry server paths, env
+            # var names, and upstream provider response bodies to an
+            # unauthenticated client. Detail goes to the server log only.
+            traceback.print_exc()
+            yield _sse("error", {"message": "تعذّر توليد الجواب. حاول مرة أخرى."})
 
     return StreamingResponse(
         event_gen(),
