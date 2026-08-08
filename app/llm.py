@@ -27,6 +27,21 @@ MAX_ANSWER_CHARS = int(os.getenv("LLM_CONTEXT_CHARS", "1400"))
 MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "900"))
 TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
 
+# Which LLM serves requests:
+#   "api"   — Hugging Face Inference only. Best quality, metered; a depleted
+#             quota takes the app down.
+#   "local" — GGUF model in-process only. No quota, no per-question cost.
+#   "both"  — API first, local as FALLBACK when the API fails (402 out of
+#             credits, 429 throttled, timeout, provider outage). This is the
+#             resilient choice: normal traffic gets the large hosted model, and
+#             an outage degrades to a smaller local one instead of failing.
+# See app/llm_local.py for the benchmark behind the default local model.
+LLM_BACKEND = os.getenv("LLM_BACKEND", "api").strip().lower()
+
+_USE_API = LLM_BACKEND in ("api", "both")
+_USE_LOCAL = LLM_BACKEND in ("local", "both")
+_FALLBACK = LLM_BACKEND == "both"
+
 LLM_API_MODEL = os.getenv("LLM_API_MODEL", "Qwen/Qwen2.5-72B-Instruct")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto")
 LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "120"))
@@ -77,6 +92,27 @@ def chat_completion(
 ) -> str:
     """Blocking chat completion. Used by the gate, which must finish before
     generation starts."""
+    if _USE_LOCAL and not _USE_API:
+        return _local_chat(system, user, model, max_tokens, temperature)
+
+    try:
+        return _api_chat(system, user, model, max_tokens, temperature)
+    except Exception as exc:
+        if not _FALLBACK:
+            raise
+        print(f"[llm] API failed ({type(exc).__name__}: {exc}); falling back to local.")
+        return _local_chat(system, user, model, max_tokens, temperature)
+
+
+def _local_chat(system, user, model, max_tokens, temperature) -> str:
+    from . import llm_local
+
+    return llm_local.chat_completion(
+        system, user, model, max_tokens=max_tokens, temperature=temperature
+    )
+
+
+def _api_chat(system, user, model, max_tokens, temperature) -> str:
     result = get_client().chat_completion(
         messages=[
             {"role": "system", "content": system},
@@ -207,20 +243,45 @@ def stream_answer(
     ``sources`` must already be filtered to the gate-approved fatwas — this
     function does not re-check relevance.
     """
-    client = get_client()
-    stream = client.chat_completion(
+    user_prompt = build_user_prompt(question, sources, verdict, premise_issue)
+
+    if _USE_LOCAL and not _USE_API:
+        yield from _local_stream(user_prompt)
+        return
+
+    # Fallback is only safe BEFORE the first token reaches the client: once text
+    # has been streamed it cannot be retracted, and silently continuing from a
+    # different model would splice two answers together.
+    emitted = False
+    try:
+        for delta in _api_stream(user_prompt):
+            emitted = True
+            yield delta
+    except Exception as exc:
+        if emitted or not _FALLBACK:
+            raise
+        print(f"[llm] API failed ({type(exc).__name__}: {exc}); falling back to local.")
+        yield from _local_stream(user_prompt)
+
+
+def _local_stream(user_prompt: str) -> Iterator[str]:
+    from . import llm_local
+
+    yield from llm_local.stream_completion(
+        SYSTEM_PROMPT, user_prompt, max_tokens=MAX_TOKENS, temperature=TEMPERATURE
+    )
+
+
+def _api_stream(user_prompt: str) -> Iterator[str]:
+    stream = get_client().chat_completion(
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": build_user_prompt(question, sources, verdict, premise_issue),
-            },
+            {"role": "user", "content": user_prompt},
         ],
         max_tokens=MAX_TOKENS,
         temperature=TEMPERATURE,
         stream=True,
     )
-
     for chunk in stream:
         try:
             delta = chunk.choices[0].delta.content
@@ -238,3 +299,16 @@ def generate_answer(
 ) -> str:
     """Non-streaming convenience wrapper (used by POST /api/chat)."""
     return "".join(stream_answer(question, sources, verdict, premise_issue)).strip()
+
+
+def describe_backend() -> dict:
+    """Which LLM is actually serving requests. Surfaced by /health."""
+    info = {"backend": LLM_BACKEND, "fallback_to_local": _FALLBACK}
+    if _USE_API:
+        info["api"] = {"model": LLM_API_MODEL, "provider": LLM_PROVIDER,
+                       "token_configured": bool(HF_TOKEN)}
+    if _USE_LOCAL:
+        from . import llm_local
+
+        info["local"] = llm_local.describe()
+    return info

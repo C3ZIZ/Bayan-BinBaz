@@ -44,13 +44,59 @@ UI               [n] renders as a link to the fatwa on binbaz.org.sa
 
 | verdict | when | behaviour |
 |---------|------|-----------|
-| `direct` | a fatwa answers the question itself | answer + cite `[n]` |
-| **`derived`** | **no exact fatwa, but retrieved ones establish the ruling** | answer + cite, and visibly separate what the shaykh stated from its application |
-| `abstain` | fatwas don't establish an answer, false premise, or out of scope | explain, cite nothing, assert no ruling |
+| `direct` | a fatwa answers **this very question** | answer + cite `[n]` |
+| **`derived`** | **no exact fatwa, but retrieved ones establish the ruling** | answer + cite the nearest fatwas, and state plainly that this is an inference, not a direct ruling by the shaykh |
+| `abstain` | false premise, out of scope, gibberish, or nothing related in the corpus | explain, cite nothing, assert no ruling |
 
 `derived` is the **common** case, not a fallback. Measured on this corpus, a fatwa's
 own question retrieves itself at a median cosine of only **0.815**, so treating
-"no exact match" as "no answer" would refuse most legitimate questions.
+"no exact match" as "no answer" would refuse most legitimate questions. `direct` is
+deliberately strict — a dialectal rephrasing, a narrower case, or applying a ruling
+to the asker's situation are all `derived`, so the UI never labels an inference as
+a matched fatwa.
+
+A **failed** gate call is reported separately from a genuine abstention. Saying
+"no fatwa exists" when the service simply could not be reached would be a false
+claim about the shaykh's fatwas, so the UI distinguishes
+*افتراض غير صحيح* / *لا توجد فتوى* / *الخدمة غير متاحة*.
+
+### LLM backend: `api`, `local`, or `both`
+
+Each question costs **two** LLM calls (gate, then generation), so a depleted
+hosted quota takes the whole app down. `LLM_BACKEND` controls this:
+
+| mode | behaviour |
+|------|-----------|
+| `api` | Hugging Face Inference only — best quality, metered |
+| `local` | GGUF model in-process — no quota, no per-question cost, works offline |
+| **`both`** | **API first, local as fallback** on 402 / 429 / timeout / outage |
+
+The fallback only engages **before the first token reaches the client** — text
+already streamed cannot be retracted, and continuing from a different model would
+splice two answers together.
+
+The local default is **Falcon-H1-3B-Instruct**, chosen by benchmarking the two
+jobs this app actually does rather than by leaderboard:
+
+| model | gate correct | Arabic | cites | speed | size |
+|-------|--------------|--------|-------|-------|------|
+| **Falcon-H1-3B (TII)** | **3/3** | 100% | ✅ | 22 tok/s | 1.9 GB |
+| Qwen2.5-3B | 2/3 | 100% | ✅ | 27 tok/s | 2.1 GB |
+| ALLaM-7B (SDAIA) | 2/3 | 100% | ✅ | 12 tok/s | 4.3 GB |
+
+ALLaM is Arabic-native and twice the size, yet scored no better on the gate, ran
+at half the speed, and echoed source blocks instead of answering — bigger and
+Arabic-specific did not win here. Reproduce with
+`python eval/bench_local_models.py`.
+
+Small models over-refuse without worked examples: the 3B model initially scored
+2/4 end-to-end, refusing a valid dialectal question. Three few-shot examples in
+the gate prompt take it to **5/5**. Verify any local model before trusting it:
+
+```bash
+docker compose -f docker-compose.test.yml run --rm \
+  -e LLM_BACKEND=local tests python eval/check_gate_cases.py
+```
 
 ### Why a gate rather than a similarity threshold
 
@@ -193,11 +239,23 @@ Both are rate limited; exceeding it returns `429` with `Retry-After`.
 
 ## Environment variables
 
-Only `HF_TOKEN` is required.
+Only `HF_TOKEN` is required, and only when `LLM_BACKEND` uses the hosted API.
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `HF_TOKEN` | — **(required)** | <https://huggingface.co/settings/tokens> → Read, with Inference Providers enabled |
+| `LLM_BACKEND` | `api` | `api` \| `local` \| `both` (API with local fallback) |
+| `LOCAL_LLM_REPO` | `tiiuae/Falcon-H1-3B-Instruct-GGUF` | Local GGUF repo. Weight downloads are free — only Inference is metered |
+| `LOCAL_LLM_FILE` | `Falcon-H1-3B-Instruct-Q4_K_M.gguf` | Quant to load (~1.9GB) |
+| `LOCAL_LLM_PATH` | — | Point at a `.gguf` on disk to skip the download |
+| `LOCAL_LLM_CTX` | `4096` | Local context window |
+| `LOCAL_UNLOAD_EMBEDDER` | `0` | Set `1` on a ~4GB host: the local LLM and BGE-M3 don't both fit |
+| `RETRIEVAL_HYBRID` | `1` | Fuse BM25 with dense via RRF |
+| `RETRIEVAL_MMR` | `1` | Diversify top-k (1.5% of the corpus has a ≥0.99 twin) |
+| `RATE_LIMIT_REQUESTS` | `20` | Per window, per client |
+| `TRUST_PROXY_HEADER` | `0` | Honour `X-Forwarded-For`. Only behind a trusted proxy — otherwise the limit is bypassable |
+| `CORS_ORIGINS` | `*` | Comma-separated allowlist |
+| `QUERY_LOG_PATH` | — | JSONL query log (no client identity). Grows the eval sets from real traffic |
+| `HF_TOKEN` | — **(required for `api`/`both`)** | <https://huggingface.co/settings/tokens> → Read, with Inference Providers enabled |
 | `LLM_API_MODEL` | `Qwen/Qwen2.5-72B-Instruct` | Answer model. Arabic-strong alternatives: Llama-3.3-70B, aya-expanse-32b |
 | `GATE_MODEL` | = `LLM_API_MODEL` | Gate can use a cheaper/faster model |
 | `LLM_PROVIDER` | `auto` | HF Inference Providers routing |

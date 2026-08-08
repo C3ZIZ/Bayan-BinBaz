@@ -15,10 +15,13 @@ WORKDIR /app
 
 # Install CPU-only PyTorch first so FlagEmbedding does NOT pull the multi-GB CUDA build.
 COPY requirements.txt .
+# llama-cpp-python (local LLM backend) ships prebuilt CPU wheels; without the
+# extra index it compiles from source.
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
     pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.9.1" && \
-    pip install -r requirements.txt
+    pip install --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+        -r requirements.txt
 
 # App code + the prebuilt index (data/index, data/processed). data/raw is .dockerignore'd.
 COPY . .

@@ -229,3 +229,75 @@ def test_stream_llm_failure_does_not_leak_provider_detail(client, monkeypatch):
     assert "router.hf.co" not in text
     assert "402" not in text
     assert "error" in text
+
+
+# ---------------- service failure must not be reported as "no fatwa exists" ----
+
+
+def test_gate_service_failure_is_not_reported_as_no_fatwa(client, monkeypatch):
+    """A failed gate call means we never checked. Claiming the shaykh has no
+    fatwa on the topic would be a false statement about the corpus."""
+    _stub_gate(monkeypatch, GateResult(
+        verdict="abstain", reason="gate call failed: 402", failed_closed=True))
+    _stub_llm(monkeypatch, "should not be called")
+
+    body = client.post("/api/chat", json={"question": "س"}).json()
+    assert body["service_error"] is True
+    assert body["answered"] is False
+    assert "لا توجد" not in body["answer"]
+    assert "تعذّر" in body["answer"]
+
+
+def test_gate_service_failure_skips_the_generation_call(client, monkeypatch):
+    """Generating after the gate already failed just burns a second call."""
+    calls = []
+    _stub_gate(monkeypatch, GateResult(verdict="abstain", failed_closed=True))
+    monkeypatch.setattr(api_module, "generate_answer",
+                        lambda *a, **k: calls.append(1) or "x")
+    client.post("/api/chat", json={"question": "س"})
+    assert calls == []
+
+
+def test_genuine_abstention_still_says_no_fatwa(client, monkeypatch):
+    _stub_gate(monkeypatch, GateResult(verdict="abstain", failed_closed=False))
+    _stub_llm(monkeypatch, "لا توجد فتوى.")
+    body = client.post("/api/chat", json={"question": "كيف أطبخ الكبسة؟"}).json()
+    assert body["service_error"] is False
+    assert "لا توجد" in body["answer"]
+
+
+def test_stream_marks_service_error_in_meta(client, monkeypatch):
+    _stub_gate(monkeypatch, GateResult(verdict="abstain", failed_closed=True))
+    _stub_llm(monkeypatch, "unused")
+    events = _events(client.post("/api/chat/stream", json={"question": "س"}).text)
+    _, meta = events[0]
+    assert meta["service_error"] is True
+    assert "تعذّر" in meta["header"]
+
+
+# ------------------- derived must not be presented as a matched fatwa ---------
+
+
+def test_derived_headline_disclaims_a_direct_ruling(client, monkeypatch):
+    """The reported UI problem: a derived answer read as 'فتوى مطابقة'."""
+    _stub_gate(monkeypatch, GateResult(verdict="derived", cited_ids=[1]))
+    _stub_llm(monkeypatch, "قرر الشيخ كذا [1].")
+    answer = client.post("/api/chat", json={"question": "س"}).json()["answer"]
+    assert "بعينها" in answer
+    assert "ليس جوابًا مباشرًا" in answer
+
+
+def test_direct_headline_claims_an_exact_match(client, monkeypatch):
+    _stub_gate(monkeypatch, GateResult(verdict="direct", cited_ids=[1]))
+    _stub_llm(monkeypatch, "الحكم كذا [1].")
+    answer = client.post("/api/chat", json={"question": "س"}).json()["answer"]
+    assert "بعينه" in answer
+
+
+def test_derived_lists_nearest_fatwas_alongside_citations(client, monkeypatch):
+    """No exact match must still surface the nearest fatwas to the user."""
+    _stub_gate(monkeypatch, GateResult(verdict="derived", cited_ids=[1]))
+    _stub_llm(monkeypatch, "حكم كذا [1].")
+    body = client.post("/api/chat", json={"question": "س"}).json()
+    assert len(body["related_fatwas"]) >= 1
+    assert len(body["citations"]) == 1
