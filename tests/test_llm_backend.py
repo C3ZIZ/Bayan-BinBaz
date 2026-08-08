@@ -243,3 +243,54 @@ def test_describe_backend_reports_fallback_mode(fake_llama, monkeypatch):
     assert d["backend"] == "both"
     assert d["fallback_to_local"] is True
     assert "api" in d and "local" in d
+
+
+# ------------------------------ the default is "both" ------------------------
+
+
+def test_default_backend_is_both(monkeypatch):
+    """Unset LLM_BACKEND must give API-with-local-fallback, not API-only, so a
+    depleted quota degrades instead of taking the app down."""
+    import importlib
+
+    monkeypatch.delenv("LLM_BACKEND", raising=False)
+    from app import llm
+
+    reloaded = importlib.reload(llm)
+    try:
+        assert reloaded.LLM_BACKEND == "both"
+        assert reloaded._USE_API is True
+        assert reloaded._USE_LOCAL is True
+        assert reloaded._FALLBACK is True
+    finally:
+        importlib.reload(reloaded)
+
+
+def test_explicit_backend_still_overrides_the_default(monkeypatch):
+    import importlib
+
+    monkeypatch.setenv("LLM_BACKEND", "api")
+    from app import llm
+
+    reloaded = importlib.reload(llm)
+    try:
+        assert reloaded.LLM_BACKEND == "api"
+        assert reloaded._FALLBACK is False
+    finally:
+        monkeypatch.delenv("LLM_BACKEND", raising=False)
+        importlib.reload(reloaded)
+
+
+def test_backend_value_is_case_and_space_insensitive(monkeypatch):
+    import importlib
+
+    monkeypatch.setenv("LLM_BACKEND", "  LOCAL  ")
+    from app import llm
+
+    reloaded = importlib.reload(llm)
+    try:
+        assert reloaded.LLM_BACKEND == "local"
+        assert reloaded._USE_API is False
+    finally:
+        monkeypatch.delenv("LLM_BACKEND", raising=False)
+        importlib.reload(reloaded)

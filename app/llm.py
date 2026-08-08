@@ -32,11 +32,17 @@ TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
 #             quota takes the app down.
 #   "local" — GGUF model in-process only. No quota, no per-question cost.
 #   "both"  — API first, local as FALLBACK when the API fails (402 out of
-#             credits, 429 throttled, timeout, provider outage). This is the
-#             resilient choice: normal traffic gets the large hosted model, and
-#             an outage degrades to a smaller local one instead of failing.
+#             credits, 429 throttled, timeout, provider outage). THE DEFAULT:
+#             normal traffic gets the large hosted model, and an outage degrades
+#             to a smaller local one instead of taking the app down.
+#
+# Because "both" is the default, an install with no HF_TOKEN still works — the
+# API call fails immediately and the local model serves the request. The first
+# such request downloads ~1.9GB, so it is slow; pre-pull the weights or set
+# LLM_BACKEND=api if you would rather fail fast than fall back.
+#
 # See app/llm_local.py for the benchmark behind the default local model.
-LLM_BACKEND = os.getenv("LLM_BACKEND", "api").strip().lower()
+LLM_BACKEND = os.getenv("LLM_BACKEND", "both").strip().lower()
 
 _USE_API = LLM_BACKEND in ("api", "both")
 _USE_LOCAL = LLM_BACKEND in ("local", "both")

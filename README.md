@@ -69,7 +69,7 @@ hosted quota takes the whole app down. `LLM_BACKEND` controls this:
 |------|-----------|
 | `api` | Hugging Face Inference only — best quality, metered |
 | `local` | GGUF model in-process — no quota, no per-question cost, works offline |
-| **`both`** | **API first, local as fallback** on 402 / 429 / timeout / outage |
+| **`both`** *(default)* | **API first, local as fallback** on 402 / 429 / timeout / outage |
 
 The fallback only engages **before the first token reaches the client** — text
 already streamed cannot be retracted, and continuing from a different model would
@@ -160,7 +160,7 @@ Vectors are L2-normalized and stored `float16`, since the index is committed to 
 ```bash
 git clone https://github.com/C3ZIZ/Bayan-BinBaz.git
 cd Bayan-BinBaz
-cp .env.example .env      # set HF_TOKEN
+cp .env.example .env      # set HF_TOKEN (optional — see LLM_BACKEND)
 docker compose up -d --build
 ```
 
@@ -239,11 +239,13 @@ Both are rate limited; exceeding it returns `429` with `Retry-After`.
 
 ## Environment variables
 
-Only `HF_TOKEN` is required, and only when `LLM_BACKEND` uses the hosted API.
+Nothing is strictly required — the default `LLM_BACKEND=both` falls back to a local
+model when the hosted API is unavailable, so the app runs without `HF_TOKEN`.
+Set `HF_TOKEN` anyway: answers are far better from the hosted model.
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `LLM_BACKEND` | `api` | `api` \| `local` \| `both` (API with local fallback) |
+| `LLM_BACKEND` | **`both`** | `api` \| `local` \| `both`. Default falls back to the local model when the API fails |
 | `LOCAL_LLM_REPO` | `tiiuae/Falcon-H1-3B-Instruct-GGUF` | Local GGUF repo. Weight downloads are free — only Inference is metered |
 | `LOCAL_LLM_FILE` | `Falcon-H1-3B-Instruct-Q4_K_M.gguf` | Quant to load (~1.9GB) |
 | `LOCAL_LLM_PATH` | — | Point at a `.gguf` on disk to skip the download |
@@ -255,7 +257,7 @@ Only `HF_TOKEN` is required, and only when `LLM_BACKEND` uses the hosted API.
 | `TRUST_PROXY_HEADER` | `0` | Honour `X-Forwarded-For`. Only behind a trusted proxy — otherwise the limit is bypassable |
 | `CORS_ORIGINS` | `*` | Comma-separated allowlist |
 | `QUERY_LOG_PATH` | — | JSONL query log (no client identity). Grows the eval sets from real traffic |
-| `HF_TOKEN` | — **(required for `api`/`both`)** | <https://huggingface.co/settings/tokens> → Read, with Inference Providers enabled |
+| `HF_TOKEN` | — *(recommended)* | <https://huggingface.co/settings/tokens> → Read, with Inference Providers enabled |
 | `LLM_API_MODEL` | `Qwen/Qwen2.5-72B-Instruct` | Answer model. Arabic-strong alternatives: Llama-3.3-70B, aya-expanse-32b |
 | `GATE_MODEL` | = `LLM_API_MODEL` | Gate can use a cheaper/faster model |
 | `LLM_PROVIDER` | `auto` | HF Inference Providers routing |
