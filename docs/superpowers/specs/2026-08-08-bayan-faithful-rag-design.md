@@ -333,6 +333,68 @@ unverifiable without the harness.
 
 ---
 
+## 11a. Implementation deviations from this spec
+
+Recorded during implementation. Each is a deliberate change with its reason, not
+an oversight.
+
+### Hybrid retrieval uses BM25, not BGE-M3 learned sparse
+
+The spec called for BGE-M3's sparse vectors. Those require `return_sparse=True`
+at encode time — a full re-encode of ~45k texts plus a new committed artifact.
+BM25 over the normalized text builds from the corpus in about a second at
+startup, adds zero bytes to the repository, and fuses through RRF identically.
+If the eval later shows learned sparse is worth the re-encode, the fusion layer
+does not change. Implemented in `app/lexical.py`.
+
+### The answer-side dense index is deferred
+
+Measured on an 8-thread CPU: questions encode at ~3.3/s, answer chunks at
+~0.92/s. The corpus produces ~23,300 chunks, so the answer pass costs ~7 hours
+against ~1.9 hours for the questions — about 9 hours total, which did not fit
+the available window.
+
+The build now ships **question-only dense retrieval**, with BM25 covering the
+answer text lexically. This is defensible rather than merely expedient: §1.1
+measured that 81% of each old vector was answer text while users send questions,
+and question-only dense is the strongest available form of that fix. It is
+controlled by `BUILD_ANSWER_INDEX` and recorded in `index_manifest.json`, and
+`tests/test_index_integrity.py` asserts the manifest cannot claim an answer
+index it does not have.
+
+**What this costs:** answer-side *semantic* matching. A question whose answer
+discusses a concept in different words than the fatwa's question is now found
+lexically rather than semantically. Quantify on the golden set's `paraphrase`
+slice before deciding whether to spend the 7 hours.
+
+### `max_length` does not drive encoding cost
+
+An early hypothesis — that `max_length=2048` forced padding to 2048 on every
+text — was **wrong**. Benchmarked: 112.7s at 2048 versus 117.2s at 512 for the
+same 320 questions. FlagEmbedding pads to the longest item in the batch. The
+cost is simply BGE-M3 on CPU. `max_length=512` is kept because chunking bounds
+every input anyway, but it buys nothing.
+
+### Index encoding is checkpointed
+
+A two-hour encode with no intermediate persistence lost ~100 minutes of work to
+a single crash. `_encode` now writes each shard to `data/.index_cache/` and
+reuses completed shards on rerun, so an interruption costs one shard.
+
+### The gate must flag false presuppositions even when the corpus refutes them
+
+Live testing showed the gate answering «ما هو الركن السادس من أركان الإسلام؟» as
+`derived`, citing fatwas that correctly state the pillars are five. The answer
+would have been faithful, but the contract wants the presupposition flagged. The
+gate prompt now says so explicitly.
+
+One case remains a genuine labelling disagreement rather than a defect:
+«هل صلاة المغرب أربع ركعات أم خمس ركعات؟» is a false dichotomy (it is three),
+and the gate answers with a citation that corrects it. Correcting a premise with
+a source is arguably better than refusing. See §12.
+
+---
+
 ## 12. Open items for the implementation plan
 
 - α weighting between question and answer fields — tune on the golden set.
