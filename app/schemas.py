@@ -33,6 +33,9 @@ class ChatResponse(BaseModel):
     # "direct" | "derived" | "abstain" — decided by the gate, not by a threshold.
     verdict: str
     answered: bool
+    # True when the gate could not run (provider down / out of credits). The UI
+    # must not present this as "no fatwa exists" — nothing was actually checked.
+    service_error: bool = False
     premise_sound: bool = True
     premise_issue: Optional[str] = None
     answer: str

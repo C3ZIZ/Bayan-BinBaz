@@ -86,8 +86,14 @@ app.include_router(api_router, prefix="/api", tags=["chat"])
 
 @app.get("/health", tags=["health"])
 def health() -> dict:
-    """Lightweight liveness probe (does NOT load the models)."""
-    return {"status": "ok"}
+    """Lightweight liveness probe (does NOT load the models).
+
+    Reports which LLM is actually serving requests, so an operator can tell at a
+    glance whether the app is on the metered hosted API or a local model.
+    """
+    from app.llm import describe_backend
+
+    return {"status": "ok", "llm": describe_backend()}
 
 
 # Serve the static chat UI at "/". Mounted LAST so it never shadows /api or /health.

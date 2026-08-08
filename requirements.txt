@@ -22,3 +22,8 @@ datasets==4.4.1
 safetensors==0.7.0
 scipy==1.16.3
 scikit-learn==1.7.2
+
+# Local GGUF backend (LLM_BACKEND=local). Removes the dependency on the hosted
+# Inference API, which is metered and takes the whole app down once depleted.
+# Benchmarked default: Falcon-H1-3B-Instruct Q4_K_M (~1.9GB) — see app/llm_local.py.
+llama-cpp-python==0.3.34

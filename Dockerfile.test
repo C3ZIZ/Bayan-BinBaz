@@ -9,10 +9,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
 
 WORKDIR /app
 COPY requirements.txt requirements-dev.txt ./
+# llama-cpp-python ships prebuilt CPU wheels; without the extra index it
+# compiles from source, which needs a toolchain and many minutes.
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
     pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.9.1" && \
-    pip install -r requirements.txt -r requirements-dev.txt
+    pip install --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+        -r requirements.txt -r requirements-dev.txt
 
 COPY . .
 CMD ["pytest"]

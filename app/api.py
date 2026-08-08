@@ -36,15 +36,23 @@ GATE_CANDIDATES = 8
 
 def _headline(gate: GateResult) -> str:
     if gate.verdict == "direct":
-        return "الحالة: وُجدت فتوى للشيخ ابن باز تجيب على هذا السؤال."
+        return "الحالة: وُجدت فتوى للشيخ ابن باز تجيب على هذا السؤال بعينه."
     if gate.verdict == "derived":
         return (
-            "الحالة: لا توجد فتوى على هذه الحالة بعينها؛ "
-            "الجواب مستنبط من فتاوى الشيخ في أصل المسألة."
+            "الحالة: لا توجد فتوى للشيخ على هذه الحالة بعينها. "
+            "ما يلي استنباط من أقرب فتاواه في أصل المسألة، وليس جوابًا مباشرًا منه، "
+            "فراجع الفتاوى المشار إليها واسأل أهل العلم لخصوص حالتك."
         )
     if not gate.premise_sound:
         return "الحالة: السؤال مبني على افتراض غير صحيح."
-    return "الحالة: لا توجد في فتاوى الشيخ ابن باز فتوى تجيب على هذا السؤال."
+    if gate.failed_closed:
+        # Never claim the corpus is empty when we simply could not check it —
+        # that is a false statement about the shaykh's fatwas, not a refusal.
+        return (
+            "الحالة: تعذّر التحقق من الفتاوى حاليًا لعطل مؤقت في الخدمة، "
+            "ولم يصدر أي حكم. أعد المحاولة بعد قليل."
+        )
+    return "الحالة: لا توجد في فتاوى الشيخ ابن باز فتوى تتصل بهذا السؤال."
 
 
 def _to_hit(h: Dict[str, Any]) -> FatwaHit:
@@ -100,6 +108,17 @@ def chat(request: ChatRequest) -> ChatResponse:
     started = time.monotonic()
     candidates, gate, sources = _pipeline(request)
 
+    if gate.failed_closed:
+        # The gate already failed against the same provider; generating would
+        # just fail again. Return the service message without a second call.
+        return ChatResponse(
+            verdict="abstain", answered=False, service_error=True,
+            premise_sound=gate.premise_sound, premise_issue=None,
+            answer=_headline(gate),
+            similarity=candidates[0]["similarity"] if candidates else 0.0,
+            citations=[], related_fatwas=[],
+        )
+
     try:
         raw = generate_answer(
             request.question, sources, gate.verdict, gate.premise_issue
@@ -130,6 +149,7 @@ def chat(request: ChatRequest) -> ChatResponse:
     return ChatResponse(
         verdict=gate.verdict,
         answered=gate.should_answer,
+        service_error=False,
         premise_sound=gate.premise_sound,
         premise_issue=gate.premise_issue or None,
         answer=_headline(gate) + "\n\n" + answer,
@@ -166,6 +186,7 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
             yield _sse("meta", {
                 "verdict": gate.verdict,
                 "answered": gate.should_answer,
+                "service_error": gate.failed_closed,
                 "premise_sound": gate.premise_sound,
                 "premise_issue": gate.premise_issue or None,
                 "header": _headline(gate),
@@ -178,6 +199,12 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
                     h.model_dump() for h in _related(candidates, gate, request.top_k)
                 ],
             })
+
+            if gate.failed_closed:
+                # Same reasoning as the non-streaming path: do not issue a
+                # second call to a provider that just failed.
+                yield _sse("done", {"citations": []})
+                return
 
             parts: List[str] = []
             for delta in stream_answer(

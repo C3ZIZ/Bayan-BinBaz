@@ -609,10 +609,14 @@
       const toast = document.getElementById("toast");
       const toastMessage = document.getElementById("toastMessage");
 
+      // "مطابقة" is reserved for a fatwa answering the question itself. A
+      // derived answer must never read as a direct ruling by the shaykh.
       const VERDICT_LABELS = {
         direct: "فتوى مطابقة",
-        derived: "جواب مستنبط",
+        derived: "استنباط · ليست فتوى مباشرة",
         abstain: "لا يوجد جواب",
+        premise: "افتراض غير صحيح",
+        service: "الخدمة غير متاحة",
       };
 
       function showToast(message) {
@@ -716,13 +720,26 @@
         });
       }
 
-      function renderBadge(bubble, verdict) {
+      function renderBadge(bubble, meta) {
         const existing = bubble.querySelector(".verdict-badge");
         if (existing) existing.remove();
-        if (!verdict) return;
+        if (!meta || !meta.verdict) return;
+
+        // Distinguish the three reasons an answer is withheld: a false premise,
+        // a genuine absence of relevant fatwas, and the service being down.
+        // Reporting a service failure as "no fatwa exists" is a false claim
+        // about the corpus.
+        let key = meta.verdict;
+        if (meta.verdict === "abstain") {
+          if (meta.service_error) key = "service";
+          else if (meta.premise_sound === false) key = "premise";
+        }
+
         const badge = document.createElement("span");
-        badge.className = "verdict-badge verdict-" + verdict;
-        badge.textContent = VERDICT_LABELS[verdict] || verdict;
+        badge.className =
+          "verdict-badge verdict-" +
+          (key === "premise" || key === "service" ? "abstain" : key);
+        badge.textContent = VERDICT_LABELS[key] || key;
         bubble.insertBefore(badge, bubble.querySelector(".message-text"));
       }
 
@@ -742,7 +759,9 @@
         const title = document.createElement("div");
         title.className = "sources-title";
         title.textContent =
-          sources && sources.length ? "الفتاوى المستند إليها:" : "فتاوى ذات صلة:";
+          sources && sources.length
+            ? "الفتاوى المستند إليها:"
+            : "أقرب الفتاوى صلةً بالسؤال:";
         block.appendChild(title);
 
         list.forEach((f, idx) => {
@@ -832,7 +851,7 @@
             prefix = data.header ? data.header + "\n\n" : "";
             sources = Array.isArray(data.sources) ? data.sources : [];
             related = Array.isArray(data.related_fatwas) ? data.related_fatwas : [];
-            renderBadge(bubble, data.verdict);
+            renderBadge(bubble, data);
             setStatus("loading");
             begin();
             render();
