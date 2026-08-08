@@ -1,24 +1,42 @@
-import os
-import gc
-import time
 import ctypes
+import gc
+import json
+import os
 import platform
 import threading
+import time
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-from FlagEmbedding import BGEM3FlagModel
 
+from .normalize import normalize_arabic
 
-EMB_PATH = Path("data/index/fatwas_embeddings.npy")
-META_PATH = Path("data/index/fatwas_meta.parquet")
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from FlagEmbedding import BGEM3FlagModel
+
+# FlagEmbedding (and through it torch) is imported lazily inside _ensure_model.
+# Importing it at module scope would pull ~1GB of framework into every process
+# that merely wants to score vectors — including the web app, which loads the
+# model lazily anyway, and the unit tests for score_fatwas.
+
+INDEX_DIR = Path("data/index")
+QUESTION_EMB_PATH = INDEX_DIR / "question_emb.npy"
+ANSWER_EMB_PATH = INDEX_DIR / "answer_emb.npy"
+ANSWER_PARENT_PATH = INDEX_DIR / "answer_parent.npy"
+META_PATH = INDEX_DIR / "fatwas_meta.parquet"
+MANIFEST_PATH = INDEX_DIR / "index_manifest.json"
 
 # Embedding model config (overridable via env for CPU/GPU tuning).
 EMB_MODEL_NAME = os.getenv("EMB_MODEL_NAME", "BAAI/bge-m3")
 # fp16 helps on GPU but is slow/unstable on CPU-only hosts — keep it off by default.
 EMB_USE_FP16 = os.getenv("EMB_USE_FP16", "0") == "1"
+
+# Weight on question-to-question similarity. The previous single-vector index was
+# 81% answer text while users send short questions, which compressed a perfect
+# self-match to a median cosine of 0.815. Tuned by eval/run_retrieval_eval.py.
+ALPHA = float(os.getenv("RETRIEVAL_ALPHA", "0.65"))
 
 
 def _malloc_trim() -> None:
@@ -30,6 +48,36 @@ def _malloc_trim() -> None:
         pass
 
 
+def score_fatwas(
+    query_vec: np.ndarray,
+    question_emb: np.ndarray,
+    answer_emb: np.ndarray,
+    answer_parent: np.ndarray,
+    alpha: float = ALPHA,
+) -> np.ndarray:
+    """Blend question similarity with max-pooled answer-chunk similarity.
+
+    A fatwa is scored by its BEST matching chunk, not its average, so a long
+    fatwa's individual points are not diluted. Returns one score per fatwa.
+    """
+    q_scores = question_emb.astype(np.float32) @ query_vec
+    n = len(q_scores)
+
+    # Seed with -inf, not 0: a genuinely negative cosine must not be floored to
+    # zero, which would inflate unrelated fatwas above related ones.
+    a_scores = np.full(n, -np.inf, dtype=np.float32)
+    if len(answer_emb):
+        chunk_scores = answer_emb.astype(np.float32) @ query_vec
+        np.maximum.at(a_scores, answer_parent, chunk_scores)
+
+    # Fatwas with no chunks (defensive; the index guarantees at least one)
+    # degenerate to their question score rather than dragging the blend down.
+    missing = ~np.isfinite(a_scores)
+    a_scores[missing] = q_scores[missing]
+
+    return alpha * q_scores + (1.0 - alpha) * a_scores
+
+
 class FatwaRetriever:
     """
     Holds the (cheap) prebuilt index in memory permanently, and the (expensive)
@@ -38,21 +86,33 @@ class FatwaRetriever:
     """
 
     def __init__(self):
-        if not EMB_PATH.exists() or not META_PATH.exists():
-            raise FileNotFoundError(
-                "Embeddings or meta files not found. Run build_index.py first."
-            )
+        for p in (QUESTION_EMB_PATH, ANSWER_EMB_PATH, ANSWER_PARENT_PATH, META_PATH):
+            if not p.exists():
+                raise FileNotFoundError(f"{p} not found. Run build_index.py first.")
 
-        # Load embeddings matrix (N, D) — normalized. ~80MB, kept resident.
-        self.embeddings = np.load(EMB_PATH)
+        # float16 on disk; cast to float32 per query inside score_fatwas.
+        self.question_emb = np.load(QUESTION_EMB_PATH)
+        self.answer_emb = np.load(ANSWER_EMB_PATH)
+        self.answer_parent = np.load(ANSWER_PARENT_PATH)
         self.meta = pd.read_parquet(META_PATH)
+        self.manifest = (
+            json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+            if MANIFEST_PATH.exists()
+            else {}
+        )
 
-        if len(self.embeddings) != len(self.meta):
+        if len(self.question_emb) != len(self.meta):
             raise RuntimeError(
-                f"Embeddings rows ({len(self.embeddings)}) != meta rows ({len(self.meta)})"
+                f"question_emb rows ({len(self.question_emb)}) != "
+                f"meta rows ({len(self.meta)})"
+            )
+        if len(self.answer_parent) != len(self.answer_emb):
+            raise RuntimeError(
+                f"answer_parent ({len(self.answer_parent)}) != "
+                f"answer_emb rows ({len(self.answer_emb)})"
             )
 
-        self._model: Optional[BGEM3FlagModel] = None
+        self._model: Optional["BGEM3FlagModel"] = None
         self._model_lock = threading.Lock()
 
     # --- model lifecycle -----------------------------------------------------
@@ -61,15 +121,20 @@ class FatwaRetriever:
     def model_loaded(self) -> bool:
         return self._model is not None
 
-    def _ensure_model(self) -> BGEM3FlagModel:
+    def _ensure_model(self) -> "BGEM3FlagModel":
         if self._model is None:
             with self._model_lock:
                 if self._model is None:
-                    self._model = BGEM3FlagModel(EMB_MODEL_NAME, use_fp16=EMB_USE_FP16)
+                    from FlagEmbedding import BGEM3FlagModel
+
+                    self._model = BGEM3FlagModel(
+                        EMB_MODEL_NAME, use_fp16=EMB_USE_FP16
+                    )
         return self._model
 
     def unload_model(self) -> bool:
-        """Drop the BGE-M3 model and return freed memory to the OS. Returns True if it was loaded."""
+        """Drop the BGE-M3 model and return freed memory to the OS.
+        Returns True if it was loaded."""
         with self._model_lock:
             if self._model is None:
                 return False
@@ -81,31 +146,30 @@ class FatwaRetriever:
     # --- search --------------------------------------------------------------
 
     def embed(self, text: str) -> np.ndarray:
+        """Embed a query. Normalization MUST match build_index.py — a mismatch
+        degrades retrieval silently."""
         model = self._ensure_model()
-        outputs = model.encode(
-            [text],
-            batch_size=1,
-            max_length=512,
-        )
+        outputs = model.encode([normalize_arabic(text)], batch_size=1, max_length=512)
         vecs = outputs["dense_vecs"].astype("float32")
-        norms = np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12
-        vecs = vecs / norms
+        vecs /= np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12
         return vecs  # shape: (1, D)
 
     def search(self, question: str, top_k: int = 5) -> List[Dict[str, Any]]:
         mark_activity()
         query_vec = self.embed(question)[0]  # (D,)
 
-        scores = self.embeddings @ query_vec  # (N,)
+        scores = score_fatwas(
+            query_vec, self.question_emb, self.answer_emb, self.answer_parent
+        )
 
-        top_k = min(top_k, len(scores))
+        top_k = max(1, min(top_k, len(scores)))
         idx_part = np.argpartition(-scores, top_k - 1)[:top_k]
         idx_sorted = idx_part[np.argsort(-scores[idx_part])]
 
         results = []
         for idx in idx_sorted:
-            score = float(scores[idx])
             row = self.meta.iloc[int(idx)]
+            cats = row.get("categories")
             results.append(
                 {
                     "id": int(row.get("id")),
@@ -113,8 +177,8 @@ class FatwaRetriever:
                     "title": str(row.get("title", "")),
                     "answer": str(row.get("answer", "")),
                     "link": str(row.get("link", "")),
-                    "categories": row.get("categories"),
-                    "similarity": score,
+                    "categories": [str(c) for c in cats] if cats is not None else [],
+                    "similarity": float(scores[idx]),
                 }
             )
         return results
@@ -154,11 +218,15 @@ def unload_idle_model(timeout: float) -> None:
     """Unload the BGE-M3 model if the service has been idle for `timeout` seconds."""
     if _instance is not None and _instance.model_loaded and idle_seconds() >= timeout:
         if _instance.unload_model():
-            print(f"[idle] Unloaded BGE-M3 after {int(idle_seconds())}s idle; RAM released to OS.")
+            print(
+                f"[idle] Unloaded BGE-M3 after {int(idle_seconds())}s idle; "
+                "RAM released to OS."
+            )
 
 
 def start_idle_monitor(timeout: int = 600, interval: int = 60) -> None:
-    """Background daemon that frees the embedding model when idle. timeout<=0 disables it."""
+    """Background daemon that frees the embedding model when idle.
+    timeout<=0 disables it."""
     if timeout <= 0:
         print("[idle] Idle model unloading disabled (MODEL_IDLE_TIMEOUT<=0).")
         return
