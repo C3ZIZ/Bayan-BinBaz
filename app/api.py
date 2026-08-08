@@ -12,6 +12,7 @@ answer's citations honest.
 """
 
 import json
+import time
 from typing import Any, Dict, Iterator, List, Tuple
 
 from fastapi import APIRouter
@@ -20,6 +21,7 @@ from fastapi.responses import StreamingResponse
 from .citations import strip_invalid_markers
 from .gate import GateResult, run_gate
 from .llm import generate_answer, stream_answer
+from .observability import log_query
 from .retrieval import get_retriever
 from .schemas import ChatRequest, ChatResponse, Citation, FatwaHit
 
@@ -92,12 +94,23 @@ def _related(candidates: List[Dict], gate: GateResult) -> List[FatwaHit]:
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest) -> ChatResponse:
+    started = time.monotonic()
     candidates, gate, sources = _pipeline(request)
 
     raw = generate_answer(
         request.question, sources, gate.verdict, gate.premise_issue
     )
     answer, citations = _citations(raw, sources)
+
+    log_query(
+        question=request.question,
+        verdict=gate.verdict,
+        premise_sound=gate.premise_sound,
+        cited_ids=gate.cited_ids,
+        top_similarity=candidates[0]["similarity"] if candidates else 0.0,
+        latency_ms=(time.monotonic() - started) * 1000,
+        gate_failed_closed=gate.failed_closed,
+    )
 
     return ChatResponse(
         verdict=gate.verdict,
@@ -129,6 +142,8 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
     a later check would have to retract.
     """
 
+    started = time.monotonic()
+
     def event_gen() -> Iterator[str]:
         try:
             candidates, gate, sources = _pipeline(request)
@@ -157,6 +172,17 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
 
             _, citations = _citations("".join(parts), sources)
             yield _sse("done", {"citations": [c.model_dump() for c in citations]})
+
+            log_query(
+                question=request.question,
+                verdict=gate.verdict,
+                premise_sound=gate.premise_sound,
+                cited_ids=gate.cited_ids,
+                top_similarity=candidates[0]["similarity"] if candidates else 0.0,
+                latency_ms=(time.monotonic() - started) * 1000,
+                gate_failed_closed=gate.failed_closed,
+                extra={"streamed": True},
+            )
 
         except Exception as e:  # surface a clean error to the client
             yield _sse("error", {"message": str(e)})
