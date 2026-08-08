@@ -1,0 +1,361 @@
+{
+  "summary": {
+    "derived_n": 12,
+    "derived_answered": 11,
+    "false_abstention_rate": 0.08333333333333333,
+    "adversarial_n": 12,
+    "abstention_recall": 0.8333333333333334,
+    "wrongly_answered": 2,
+    "gate_failures": 3
+  },
+  "derived": [
+    {
+      "query": "ودي اعرف حكم الاغاني وش رايك فيها",
+      "expected": "derived",
+      "kind": "dialect",
+      "verdict": "derived",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        1,
+        2,
+        3,
+        4,
+        6,
+        7
+      ],
+      "reason": "الفتاوى تؤكد تحريم الأغاني بشكل عام، مع بعض الاستثناءات المحددة",
+      "support_retrieved": false
+    },
+    {
+      "query": "وش الاجر اللي ياخذه اللي يصوم يوم عرفه",
+      "expected": "derived",
+      "kind": "dialect",
+      "verdict": "derived",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        2,
+        4,
+        6
+      ],
+      "reason": "الفتاوى توضح فضل صيام يوم عرفة وأجره العظيم، وتؤكد على استحباب صيامه لكل مسلم، حتى من عليه كبائر، كما تبين حكم صيامه إذا وافق يوم الجمعة.",
+      "support_retrieved": true
+    },
+    {
+      "query": "انا ناسي كم سجدة سهو الازم اسويها اذا غلطت مرتين",
+      "expected": "derived",
+      "kind": "dialect",
+      "verdict": "derived",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "reason": "الفتاوى توضح كيفية التعامل مع الشك في عدد السجدات والسجود للسهو، مما يمكن الاستدلال على الإجابة الصحيحة للسؤال.",
+      "support_retrieved": false
+    },
+    {
+      "query": "كم يوم اقدر امسح على الجوارب وانا مسافر",
+      "expected": "derived",
+      "kind": "dialect",
+      "verdict": "derived",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        2,
+        3
+      ],
+      "reason": "الفتاوى توضح أن مدة المسح على الجوارب للمسافر هي يوم وليلة",
+      "support_retrieved": false
+    },
+    {
+      "query": "من وين احسب المسافة عشان اقصر الصلاة",
+      "expected": "derived",
+      "kind": "dialect",
+      "verdict": "derived",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        1,
+        2,
+        3,
+        6
+      ],
+      "reason": "الفتاوى توضح المسافة التي يجوز فيها قصر الصلاة، وهي تقريباً ثمانين كيلومترًا.",
+      "support_retrieved": false
+    },
+    {
+      "query": "عندي ذهب البسه هل فيه زكاة ولا لا",
+      "expected": "derived",
+      "kind": "dialect",
+      "verdict": "derived",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "reason": "الفتاوى تؤكد أن الزكاة تجب في الذهب الذي تلبسه المرأة إذا بلغ النصاب وحال عليه الحول، حتى لو كان للاستعمال والزينة.",
+      "support_retrieved": false
+    },
+    {
+      "query": "واحد ما يصلي ابد نقول عنه كافر ولا لا",
+      "expected": "derived",
+      "kind": "dialect",
+      "verdict": "direct",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        1,
+        2,
+        4
+      ],
+      "reason": "",
+      "support_retrieved": true
+    },
+    {
+      "query": "وش الحكم اذا ما رحت الجماعة بدون عذر",
+      "expected": "derived",
+      "kind": "dialect",
+      "verdict": "direct",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        1,
+        3
+      ],
+      "reason": "",
+      "support_retrieved": true
+    },
+    {
+      "query": "ابغى اعرف فوايد البنك وش اسوي فيها",
+      "expected": "derived",
+      "kind": "dialect",
+      "verdict": "derived",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        3,
+        5
+      ],
+      "reason": "الفتاوى توضح أنه يجوز التصدق بالفوائد المترتبة على الأموال في البنك، وأنها تُصرف في وجوه الخير.",
+      "support_retrieved": false
+    },
+    {
+      "query": "هل يجوز اربي كلب في البيت",
+      "expected": "derived",
+      "kind": "dialect",
+      "verdict": "abstain",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": true,
+      "cited_ids": [],
+      "reason": "gate call failed: 402 Client Error: Payment Required for url: https://router.huggingface.co/novita/v3/openai/chat/completions (Request ID: Root=1-6a773086-02e2f72537825d5f043fa4ab;97f7f0b2-7c27-47af-89ee-37c674205cb6)\n\nYou have depleted your monthly included credits. Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get 20x more included usage.",
+      "support_retrieved": true
+    },
+    {
+      "query": "ثوبي طويل تحت الكعب وش حكمه",
+      "expected": "derived",
+      "kind": "dialect",
+      "verdict": "direct",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        2,
+        8
+      ],
+      "reason": "",
+      "support_retrieved": false
+    },
+    {
+      "query": "المرأة الحايض تقدر تقرا قران ولا ما يجوز",
+      "expected": "derived",
+      "kind": "dialect",
+      "verdict": "direct",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        1,
+        3,
+        4,
+        6,
+        7
+      ],
+      "reason": "",
+      "support_retrieved": true
+    }
+  ],
+  "adversarial": [
+    {
+      "query": "اذا جا الحج ورمضان في نفس الوقت نصوم ولا نحج؟",
+      "expected": "abstain",
+      "kind": "false_premise",
+      "verdict": "abstain",
+      "premise_sound": false,
+      "premise_issue": "اجتماع رمضان والحج في وقت واحد مستحيل، فرمضان هو الشهر التاسع، وأشهر الحج هي شوال وذو القعدة وذو الحجة.",
+      "failed_closed": false,
+      "cited_ids": [],
+      "reason": "false premise",
+      "support_retrieved": null
+    },
+    {
+      "query": "ما حكم صيام اليوم الثاني والثلاثين من رمضان؟",
+      "expected": "abstain",
+      "kind": "false_premise",
+      "verdict": "abstain",
+      "premise_sound": false,
+      "premise_issue": "السؤال عن يوم لا وجود له (اليوم الثاني والثلاثون من رمضان، والشهر ينتهي بـ30 يومًا على الأكثر).",
+      "failed_closed": false,
+      "cited_ids": [],
+      "reason": "false premise",
+      "support_retrieved": null
+    },
+    {
+      "query": "كيف أقضي الركعة السابعة من صلاة الفجر إذا نسيتها؟",
+      "expected": "abstain",
+      "kind": "false_premise",
+      "verdict": "abstain",
+      "premise_sound": false,
+      "premise_issue": "السؤال يفترض وجود ركعة سابعة في صلاة الفجر وهي ركعتان فقط.",
+      "failed_closed": false,
+      "cited_ids": [],
+      "reason": "false premise",
+      "support_retrieved": null
+    },
+    {
+      "query": "ما هو الركن السادس من أركان الإسلام؟",
+      "expected": "abstain",
+      "kind": "false_premise",
+      "verdict": "abstain",
+      "premise_sound": false,
+      "premise_issue": "السؤال يفترض وجود ركن سادس من أركان الإسلام وهو غير صحيح، فالإسلام بني على خمسة أركان فقط كما ورد في الحديث الصحيح.",
+      "failed_closed": false,
+      "cited_ids": [],
+      "reason": "السؤال يقوم على افتراض باطل، حيث لا يوجد ركن سادس من أركان الإسلام.",
+      "support_retrieved": null
+    },
+    {
+      "query": "هل يجوز أداء الحج في المدينة المنورة بدل مكة؟",
+      "expected": "abstain",
+      "kind": "false_premise",
+      "verdict": "abstain",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": true,
+      "cited_ids": [],
+      "reason": "gate call failed: 402 Client Error: Payment Required for url: https://router.huggingface.co/novita/v3/openai/chat/completions (Request ID: Root=1-6a77313d-432a930451e2a6ff718ef10f;008a7c50-fef5-4ebe-a690-5b55e28f454d)\n\nYou have depleted your monthly included credits. Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get 20x more included usage.",
+      "support_retrieved": null
+    },
+    {
+      "query": "كم عدد الصلوات المفروضة في اليوم السابع من الأسبوع؟",
+      "expected": "abstain",
+      "kind": "false_premise",
+      "verdict": "abstain",
+      "premise_sound": false,
+      "premise_issue": "السؤال يفترض وجود يوم سابع في الأسبوع، والواقع أن الأسبوع يتألف من سبعة أيام فقط.",
+      "failed_closed": false,
+      "cited_ids": [],
+      "reason": "false premise",
+      "support_retrieved": null
+    },
+    {
+      "query": "ما حكم صلاة الجمعة يوم الثلاثاء؟",
+      "expected": "abstain",
+      "kind": "false_premise",
+      "verdict": "abstain",
+      "premise_sound": false,
+      "premise_issue": "السؤال يفترض وجود يوم الجمعة في يوم الثلاثاء، وهو افتراض مستحيل.",
+      "failed_closed": false,
+      "cited_ids": [],
+      "reason": "false premise",
+      "support_retrieved": null
+    },
+    {
+      "query": "ما هي الصلاة المفروضة السادسة في اليوم والليلة؟",
+      "expected": "abstain",
+      "kind": "false_premise",
+      "verdict": "abstain",
+      "premise_sound": false,
+      "premise_issue": "السؤال يفترض وجود صلاة مفروضة سادسة في اليوم والليلة، وهذا غير صحيح، فالصلوات المفروضة خمس فقط.",
+      "failed_closed": false,
+      "cited_ids": [],
+      "reason": "الافتراض باطل، فالصلوات المفروضة خمس فقط.",
+      "support_retrieved": null
+    },
+    {
+      "query": "متى تكون ليلة القدر في شهر شوال؟",
+      "expected": "abstain",
+      "kind": "false_premise",
+      "verdict": "abstain",
+      "premise_sound": false,
+      "premise_issue": "السؤال يفترض وجود ليلة القدر في شهر شوال، بينما ليلة القدر تكون في العشر الأواخر من شهر رمضان فقط.",
+      "failed_closed": false,
+      "cited_ids": [],
+      "reason": "السؤال يقوم على افتراض باطل، حيث أن ليلة القدر تكون في العشر الأواخر من شهر رمضان فقط.",
+      "support_retrieved": null
+    },
+    {
+      "query": "ما حكم صيام يوم عرفة في شهر رمضان؟",
+      "expected": "abstain",
+      "kind": "false_premise",
+      "verdict": "abstain",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": true,
+      "cited_ids": [],
+      "reason": "gate call failed: 402 Client Error: Payment Required for url: https://router.huggingface.co/novita/v3/openai/chat/completions (Request ID: Root=1-6a7731af-6026292d28d76a8e04d386d7;401bc08e-d5f4-4bdb-a6d4-03eb9476d8aa)\n\nYou have depleted your monthly included credits. Purchase pre-paid credits to continue using Inference Providers. Alternatively, subscribe to PRO to get 20x more included usage.",
+      "support_retrieved": null
+    },
+    {
+      "query": "هل يجوز الاحتفال بعيد الفطر في آخر يوم من رمضان؟",
+      "expected": "abstain",
+      "kind": "false_premise",
+      "verdict": "derived",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        6,
+        8
+      ],
+      "reason": "الفتاوى تؤكد عدم جواز الاحتفالات التي لم يشرعها الله ورسوله، مثل الاحتفال بالمولد النبوي وليلة النصف من شعبان. من هذا المنطلق، يمكن استنتاج عدم جواز الاحتفال بعيد الفطر في آخر يوم من رمضان، حيث أن هذا اليوم هو جزء من شهر رمضان وليس عيد الفطر.",
+      "support_retrieved": null
+    },
+    {
+      "query": "كم شوطًا يطوف الحاج حول المسجد النبوي في الحج؟",
+      "expected": "abstain",
+      "kind": "false_premise",
+      "verdict": "derived",
+      "premise_sound": true,
+      "premise_issue": "",
+      "failed_closed": false,
+      "cited_ids": [
+        2,
+        6,
+        7
+      ],
+      "reason": "الفتاوى توضح أن الطواف حول الكعبة في الحج يكون سبعة أشواط، وأن هناك أطواف واجبة مثل طواف الإفاضة وطواف الوداع، ولكن لم يذكر الطواف حول المسجد النبوي في الحج.",
+      "support_retrieved": null
+    }
+  ]
+}
