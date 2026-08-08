@@ -558,10 +558,45 @@
       </div>
     </main>
 
-    <script>
-      // Relative path so the UI works wherever it's served from (localhost, VPS, Docker).
-      const API_URL = "/api/chat";
+    <style>
+      .verdict-badge {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 3px 9px;
+        border-radius: 999px;
+        margin-bottom: 8px;
+        letter-spacing: 0.2px;
+      }
+      .verdict-direct { background: #dcfce7; color: #166534; }
+      .verdict-derived { background: #fef3c7; color: #92400e; }
+      .verdict-abstain { background: #fee2e2; color: #991b1b; }
+      .cite-link {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        color: #b45309;
+        background: #fef3c7;
+        border-radius: 4px;
+        padding: 0 4px;
+        margin: 0 2px;
+        text-decoration: none;
+        vertical-align: super;
+      }
+      .cite-link:hover { background: #fde68a; text-decoration: underline; }
+      .sources-block {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+        font-size: 12px;
+        line-height: 1.9;
+      }
+      .sources-title { font-weight: 700; margin-bottom: 4px; }
+      .sources-block a { color: #1d4ed8; text-decoration: none; }
+      .sources-block a:hover { text-decoration: underline; }
+    </style>
 
+    <script>
       const chatMessages = document.getElementById("chatMessages");
       const chatForm = document.getElementById("chatForm");
       const questionInput = document.getElementById("questionInput");
@@ -573,6 +608,12 @@
 
       const toast = document.getElementById("toast");
       const toastMessage = document.getElementById("toastMessage");
+
+      const VERDICT_LABELS = {
+        direct: "فتوى مطابقة",
+        derived: "جواب مستنبط",
+        abstain: "لا يوجد جواب",
+      };
 
       function showToast(message) {
         toastMessage.textContent = message;
@@ -587,6 +628,9 @@
         } else if (state === "loading") {
           statusDot.style.backgroundColor = "#d7a562";
           statusText.textContent = "جارٍ البحث في الفتاوى...";
+        } else if (state === "checking") {
+          statusDot.style.backgroundColor = "#d7a562";
+          statusText.textContent = "جارٍ التحقق من الفتاوى...";
         } else if (state === "error") {
           statusDot.style.backgroundColor = "#ef4444";
           statusText.textContent = "حدث خطأ في الاتصال";
@@ -612,48 +656,118 @@
 
         bubble.appendChild(meta);
         bubble.appendChild(content);
-
         row.appendChild(bubble);
         return row;
       }
 
       function addMessage(text, sender) {
-        if (emptyState) {
-          emptyState.remove();
-        }
+        if (emptyState) emptyState.remove();
         const el = createMessageElement(text, sender);
         chatMessages.appendChild(el);
         chatMessages.scrollTop = chatMessages.scrollHeight;
         return el;
       }
 
-      // Empty bot bubble whose text node we stream into.
       function addBotBubble() {
         if (emptyState) emptyState.remove();
         const el = createMessageElement("", "bot");
         chatMessages.appendChild(el);
         chatMessages.scrollTop = chatMessages.scrollHeight;
-        return el.querySelector(".message-text");
+        return {
+          bubble: el.querySelector(".message-bubble"),
+          content: el.querySelector(".message-text"),
+        };
       }
 
-      // Build the "related fatwas / matched link" block appended after the answer.
-      function buildLinksText(meta) {
-        let extra = "";
-        if (meta.fatwa_link) {
-          extra += "\n\nرابط الفتوى المطابقة:\n" + meta.fatwa_link;
-        } else if (
-          Array.isArray(meta.related_fatwas) &&
-          meta.related_fatwas.length > 0
-        ) {
-          extra += "\n\nأقرب الفتاوى من ابن باز:\n";
-          meta.related_fatwas.forEach((f, idx) => {
-            if (f.link) {
-              const title = f.title || f.question || "فتوى ذات صلة";
-              extra += `\n${idx + 1}. ${title}\n${f.link}\n`;
-            }
-          });
-        }
-        return extra;
+      // Render answer text, turning [n] markers into links to the cited fatwa.
+      // Built with createElement/textContent only — never innerHTML — so fatwa
+      // titles and model output can never inject markup.
+      // Map marker number -> source. Never index positionally: the `done` event
+      // sends citations ordered by first appearance, so if the model writes [2]
+      // before [1] a positional lookup links each marker to the WRONG fatwa —
+      // the misattribution this whole design exists to prevent.
+      function markerMap(list) {
+        const map = new Map();
+        (list || []).forEach((s, i) => {
+          map.set(Number(s.marker != null ? s.marker : i + 1), s);
+        });
+        return map;
+      }
+
+      function renderAnswer(container, text, sources) {
+        container.textContent = "";
+        const byMarker = markerMap(sources);
+        const parts = text.split(/(\[\d+\])/g);
+        parts.forEach((part) => {
+          const m = /^\[(\d+)\]$/.exec(part);
+          const source = m ? byMarker.get(Number(m[1])) : null;
+          if (source && source.link) {
+            const a = document.createElement("a");
+            a.className = "cite-link";
+            a.href = source.link;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.title = source.title || "فتوى";
+            a.textContent = m[1];
+            container.appendChild(a);
+          } else {
+            container.appendChild(document.createTextNode(part));
+          }
+        });
+      }
+
+      function renderBadge(bubble, verdict) {
+        const existing = bubble.querySelector(".verdict-badge");
+        if (existing) existing.remove();
+        if (!verdict) return;
+        const badge = document.createElement("span");
+        badge.className = "verdict-badge verdict-" + verdict;
+        badge.textContent = VERDICT_LABELS[verdict] || verdict;
+        bubble.insertBefore(badge, bubble.querySelector(".message-text"));
+      }
+
+      function renderSources(bubble, sources, related) {
+        const old = bubble.querySelector(".sources-block");
+        if (old) old.remove();
+
+        // Prefer the fatwas actually cited; fall back to related ones. Under an
+        // abstention the server sends neither, so nothing is shown — listing
+        // "closest fatwas" there would invite reading a ruling into a refusal.
+        const list = sources && sources.length ? sources : related || [];
+        if (!list.length) return;
+
+        const block = document.createElement("div");
+        block.className = "sources-block";
+
+        const title = document.createElement("div");
+        title.className = "sources-title";
+        title.textContent =
+          sources && sources.length ? "الفتاوى المستند إليها:" : "فتاوى ذات صلة:";
+        block.appendChild(title);
+
+        list.forEach((f, idx) => {
+          const line = document.createElement("div");
+          const label = document.createElement("span");
+          label.textContent =
+            (f.marker != null ? f.marker : idx + 1) + ". ";
+          line.appendChild(label);
+
+          if (f.link) {
+            const a = document.createElement("a");
+            a.href = f.link;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.textContent = f.title || f.question || "فتوى";
+            line.appendChild(a);
+          } else {
+            line.appendChild(
+              document.createTextNode(f.title || f.question || "فتوى")
+            );
+          }
+          block.appendChild(line);
+        });
+
+        bubble.appendChild(block);
       }
 
       chatForm.addEventListener("submit", async (e) => {
@@ -666,24 +780,22 @@
         questionInput.style.height = "auto";
 
         submitButton.disabled = true;
-        setStatus("loading");
+        setStatus("checking");
 
-        const content = addBotBubble();
+        const { bubble, content } = addBotBubble();
         content.textContent = "…";
 
-        // ---- typewriter state ----
-        let prefix = ""; // status header (shown instantly, before the answer)
-        let suffix = ""; // related-fatwas block (appended at the very end)
-        let shown = ""; // answer chars already revealed
-        let pending = ""; // answer chars still queued to reveal
+        let prefix = "";
+        let shown = "";
+        let pending = "";
+        let sources = [];
+        let related = [];
         let started = false;
         let streamDone = false;
-        let finished = false;
         let hadError = false;
 
         const render = () => {
-          // Show the related-fatwas block only once the answer has finished typing.
-          content.textContent = prefix + shown + (finished ? suffix : "");
+          renderAnswer(content, prefix + shown, sources);
           chatMessages.scrollTop = chatMessages.scrollHeight;
         };
 
@@ -694,7 +806,6 @@
           }
         };
 
-        // Reveal characters smoothly, catching up faster when the backlog grows.
         const timer = setInterval(() => {
           if (pending.length > 0) {
             const step = Math.max(1, Math.ceil(pending.length / 40));
@@ -702,9 +813,9 @@
             pending = pending.slice(step);
             render();
           } else if (streamDone) {
-            finished = true;
             clearInterval(timer);
             render();
+            renderSources(bubble, sources, related);
             setStatus(hadError ? "error" : "idle");
             submitButton.disabled = false;
             questionInput.focus();
@@ -716,15 +827,24 @@
           try {
             data = JSON.parse(dataStr);
           } catch (_) {}
+
           if (evt === "meta") {
             prefix = data.header ? data.header + "\n\n" : "";
-            suffix = buildLinksText(data);
+            sources = Array.isArray(data.sources) ? data.sources : [];
+            related = Array.isArray(data.related_fatwas) ? data.related_fatwas : [];
+            renderBadge(bubble, data.verdict);
+            setStatus("loading");
             begin();
             render();
           } else if (evt === "token") {
             begin();
             pending += data.t || "";
           } else if (evt === "done") {
+            // Authoritative citation list, resolved server-side once the full
+            // answer is known; invented markers have already been stripped.
+            if (Array.isArray(data.citations) && data.citations.length) {
+              sources = data.citations;
+            }
             streamDone = true;
           } else if (evt === "error") {
             hadError = true;
@@ -740,6 +860,16 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ question: question, top_k: 5 }),
           });
+
+          if (resp.status === 429) {
+            clearInterval(timer);
+            content.textContent =
+              "عدد الطلبات كبير. الرجاء الانتظار قليلًا ثم إعادة المحاولة.";
+            setStatus("error");
+            submitButton.disabled = false;
+            showToast("تم تجاوز الحد المسموح من الطلبات.");
+            return;
+          }
           if (!resp.ok || !resp.body) throw new Error("HTTP " + resp.status);
 
           const reader = resp.body.getReader();
@@ -784,7 +914,6 @@
         }
       });
 
-      // Auto-resize textarea
       questionInput.addEventListener("input", () => {
         questionInput.style.height = "auto";
         questionInput.style.height =

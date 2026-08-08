@@ -1,0 +1,60 @@
+{"query": "اذا جا الحج ورمضان في نفس الوقت نصوم ولا نحج؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "رمضان الشهر التاسع وأشهر الحج شوال وذو القعدة وذو الحجة، فلا يجتمعان أبدًا.", "source": "https://www.islamweb.net/en/fatwa/349132/sacred-months-are-four-and-hajj-months-are-three"}
+{"query": "ما حكم صيام اليوم الثاني والثلاثين من رمضان؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "الشهر القمري تسعة وعشرون أو ثلاثون يومًا، فلا يوجد يوم ثانٍ وثلاثون.", "source": "https://islamweb.net/en/article/155869/months-of-the-islamic-calendar"}
+{"query": "كيف أقضي الركعة السابعة من صلاة الفجر إذا نسيتها؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "صلاة الفجر ركعتان فقط، فلا توجد ركعة سابعة.", "source": "https://www.islamweb.net/ar/fatwa/128245"}
+{"query": "ما هو الركن السادس من أركان الإسلام؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "أركان الإسلام خمسة، ولا سادس لها.", "source": "https://islamqa.info/en/answers/1699"}
+{"query": "هل يجوز أداء الحج في المدينة المنورة بدل مكة؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "الحج عبادة مرتبطة بمكة والمشاعر، ولا يُؤدى في المدينة.", "source": "https://islamqa.info/en/answers/1699"}
+{"query": "كم عدد الصلوات المفروضة في اليوم السابع من الأسبوع؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "الصلوات المفروضة خمس في كل يوم، ولا تختلف باختلاف أيام الأسبوع.", "source": "https://www.islamweb.net/ar/fatwa/16167"}
+{"query": "ما حكم صلاة الجمعة يوم الثلاثاء؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "الجمعة اسم لليوم نفسه، فلا تُصلى في غيره.", "source": "https://www.islamweb.net/ar/fatwa/16167"}
+{"query": "ما هي الصلاة المفروضة السادسة في اليوم والليلة؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "الفرائض خمس صلوات، ولا سادسة.", "source": "https://www.islamweb.net/ar/fatwa/16167"}
+{"query": "متى تكون ليلة القدر في شهر شوال؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "ليلة القدر في العشر الأواخر من رمضان لا في شوال.", "source": "https://islamqa.info/en/answers/1699"}
+{"query": "ما حكم صيام يوم عرفة في شهر رمضان؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "يوم عرفة هو التاسع من ذي الحجة، وليس في رمضان.", "source": "https://binbaz.org.sa/fatwas/12720"}
+{"query": "هل يجوز الاحتفال بعيد الفطر في آخر يوم من رمضان؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "عيد الفطر أول أيام شوال، أي بعد انتهاء رمضان.", "source": "https://islamweb.net/en/article/155869/months-of-the-islamic-calendar"}
+{"query": "كم شوطًا يطوف الحاج حول المسجد النبوي في الحج؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "الطواف يكون حول الكعبة في المسجد الحرام، لا حول المسجد النبوي.", "source": "https://islamqa.info/en/answers/1699"}
+{"query": "ما هي الشهادة الثالثة في الإسلام؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "الشهادتان اثنتان فقط، ولا ثالثة لهما عند أهل السنة.", "source": "https://islamqa.info/en/answers/1699"}
+{"query": "ما حكم صيام شهر رمضان في شهر شعبان؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "رمضان شهر محدد بعينه، فلا يُصام بوصفه رمضان في شعبان.", "source": "https://islamweb.net/en/article/155869/months-of-the-islamic-calendar"}
+{"query": "كم يومًا يقف الحجاج بعرفة، خمسة أم ستة؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "الوقوف بعرفة يوم واحد هو التاسع من ذي الحجة.", "source": "https://binbaz.org.sa/fatwas/12720"}
+{"query": "ما حكم إخراج زكاة الفطر في الشهر الثالث عشر من السنة الهجرية؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "السنة الهجرية اثنا عشر شهرًا، فلا يوجد شهر ثالث عشر.", "source": "https://islamweb.net/en/article/155869/months-of-the-islamic-calendar"}
+{"query": "هل صلاة المغرب أربع ركعات أم خمس ركعات؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "المغرب ثلاث ركعات، فالخياران المطروحان كلاهما خطأ.", "source": "https://www.islamweb.net/ar/fatwa/128245"}
+{"query": "ما هو اليوم الثامن من أيام الأسبوع في التقويم الهجري؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "الأسبوع سبعة أيام، ولا ثامن له.", "source": "https://islamweb.net/en/article/155869/months-of-the-islamic-calendar"}
+{"query": "ما حكم من صام رمضان ثلاثة عشر شهرًا متتابعة؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "رمضان شهر واحد في السنة، فلا يكون ثلاثة عشر شهرًا متتابعة.", "source": "https://islamweb.net/en/article/155869/months-of-the-islamic-calendar"}
+{"query": "كم عدد الأشهر الحرم، عشرة أم اثنا عشر؟", "expected_verdict": "abstain", "reason": "false_premise", "note": "الأشهر الحرم أربعة، فالخياران المطروحان كلاهما خطأ.", "source": "https://www.islamweb.net/en/fatwa/349132/sacred-months-are-four-and-hajj-months-are-three"}
+{"query": "ما هي أفضل لغة برمجة لتعلم الذكاء الاصطناعي؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال تقني لا علاقة له بالفتاوى.", "source": ""}
+{"query": "كيف أطبخ الكبسة السعودية بطريقة صحيحة؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال طبخ.", "source": ""}
+{"query": "ما هي أسعار أسهم شركة أرامكو اليوم؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال مالي عن بيانات لحظية.", "source": ""}
+{"query": "من فاز بكأس العالم لكرة القدم عام 2022؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال رياضي.", "source": ""}
+{"query": "ما هي حالة الطقس في الرياض غدًا؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال عن الطقس.", "source": ""}
+{"query": "كيف أصلح محرك سيارتي إذا كان يصدر صوتًا غريبًا؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال ميكانيكي.", "source": ""}
+{"query": "ما هو أفضل هاتف ذكي يمكنني شراؤه هذا العام؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال استهلاكي تقني.", "source": ""}
+{"query": "اشرح لي نظرية النسبية لأينشتاين ببساطة", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال فيزيائي.", "source": ""}
+{"query": "ما هي عاصمة الأرجنتين وكم عدد سكانها؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال جغرافي.", "source": ""}
+{"query": "كيف أستثمر أموالي في العملات الرقمية لتحقيق أرباح؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "طلب استشارة استثمارية لا فتوى.", "source": ""}
+{"query": "اكتب لي كودًا بلغة بايثون يرتب قائمة أرقام", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "طلب برمجي.", "source": ""}
+{"query": "ما هي أعراض مرض السكري وكيف أعالجه؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "استشارة طبية سريرية لا فتوى شرعية.", "source": ""}
+{"query": "متى تأسست شركة مايكروسوفت ومن مؤسسها؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال معلومات عامة.", "source": ""}
+{"query": "ما هي أفضل وجهة سياحية في أوروبا للعائلات؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال سياحي.", "source": ""}
+{"query": "كيف أتعلم اللغة الإنجليزية بسرعة؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال تعليمي عام.", "source": ""}
+{"query": "ما الفرق بين معالج إنتل ومعالج إيه إم دي؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال عتاد حاسوبي.", "source": ""}
+{"query": "أعطني وصفة لتحضير كيكة الشوكولاتة", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال طبخ.", "source": ""}
+{"query": "كم تبعد مدينة جدة عن مدينة الدمام بالكيلومترات؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال مسافات.", "source": ""}
+{"query": "ما هي أفضل طريقة لتدريب كلبي على الطاعة؟", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال تدريب حيوانات.", "source": ""}
+{"query": "اقترح لي خطة تمارين رياضية لبناء العضلات", "expected_verdict": "abstain", "reason": "out_of_scope", "note": "سؤال لياقة بدنية.", "source": ""}
+{"query": "اسدفهسادفه سدفهسادف هسادف", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "ثقصث ضصثق ضصثقض صثقضص", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "لكمنته لكمنته لكمنتهل كمنته", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "زوةيرا زوةيرا زوةير ازوةيرا", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "شسيبل شسيبل شسيب لشسيبل", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "غعهخح غعهخح غعهخ حغعهخح", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "ئءؤر ئءؤر ئءؤ رئءؤر", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "طكمن طكمن طكم نطكمن", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "ظتنم ظتنم ظتن مظتنم", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "قفغع قفغع قفغ عقفغع", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "دجحخ دجحخ دجح خدجحخ", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "صضشس صضشس صضش سصضشس", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "همغخ همغخ همغ خهمغخ", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "بلاي تنمك ذشئء وزرة", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "فقثص ضطغظ ذوزر ائءي", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
+{"query": "كككك للللل ممممم نننن", "expected_verdict": "abstain", "reason": "gibberish", "note": "تكرار حروف بلا معنى.", "source": ""}
+{"query": "خخخ ججج ححح ددد", "expected_verdict": "abstain", "reason": "gibberish", "note": "تكرار حروف بلا معنى.", "source": ""}
+{"query": "طططط ظظظظ عععع غغغغ", "expected_verdict": "abstain", "reason": "gibberish", "note": "تكرار حروف بلا معنى.", "source": ""}
+{"query": "ضضض صصص ثثث قققق", "expected_verdict": "abstain", "reason": "gibberish", "note": "تكرار حروف بلا معنى.", "source": ""}
+{"query": "شسي بلات نمكط ذوزرة", "expected_verdict": "abstain", "reason": "gibberish", "note": "حروف عشوائية.", "source": ""}
