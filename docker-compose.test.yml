@@ -10,7 +10,7 @@ services:
       - .:/app
       - hf-models:/models
     environment:
-      OMP_NUM_THREADS: "4"
+      OMP_NUM_THREADS: "8"
 
 volumes:
   hf-models:

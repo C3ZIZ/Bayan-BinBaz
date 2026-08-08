@@ -17,6 +17,7 @@ negligible recall loss — it lives in git, so size matters.
 """
 
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -30,10 +31,21 @@ PROCESSED_PATH = Path("data/processed/fatwas.parquet")
 INDEX_DIR = Path("data/index")
 
 EMB_MODEL = "BAAI/bge-m3"
-MAX_LENGTH = 2048
 CHUNK_MAX_TOKENS = 450
 CHUNK_OVERLAP = 100
-BATCH_SIZE = 16
+# FlagEmbedding pads each batch to max_length rather than to the longest item
+# in it, so an oversized max_length is paid on EVERY text. Chunking already
+# bounds every input to CHUNK_MAX_TOKENS, so 512 covers all of them; using
+# 2048 here made encoding roughly 4x slower for identical output.
+MAX_LENGTH = int(os.getenv("BUILD_MAX_LENGTH", "512"))
+BATCH_SIZE = int(os.getenv("BUILD_BATCH_SIZE", "32"))
+
+# Measured on an 8-thread CPU: questions encode at ~2.8/s but answer chunks at
+# ~0.92/s, so the ~23k answer chunks cost ~7 hours against ~1.9 hours for the
+# questions. The answer-side dense pass is therefore optional. With it off,
+# dense retrieval matches question-to-question (which is what the corpus
+# asymmetry called for anyway) and BM25 covers the answer text lexically.
+BUILD_ANSWER_INDEX = os.getenv("BUILD_ANSWER_INDEX", "1") == "1"
 
 
 def _encode(model, texts, label):
@@ -59,24 +71,29 @@ def main():
 
     questions = [normalize_arabic(q) for q in df["question"].fillna("").tolist()]
 
-    chunk_texts, chunk_parent = [], []
-    for row_idx, answer in enumerate(df["answer"].fillna("").tolist()):
-        pieces = chunk_text(
-            normalize_arabic(answer),
-            token_len,
-            max_tokens=CHUNK_MAX_TOKENS,
-            overlap_tokens=CHUNK_OVERLAP,
-        )
-        if not pieces:
-            # Terse or empty answer: fall back to the question so that every
-            # fatwa still owns at least one chunk and stays reachable.
-            pieces = [questions[row_idx] or " "]
-        for piece in pieces:
-            chunk_texts.append(piece)
-            chunk_parent.append(row_idx)
-
     question_emb = _encode(model, questions, "questions")
-    answer_emb = _encode(model, chunk_texts, "answer chunks")
+
+    chunk_parent: list = []
+    if BUILD_ANSWER_INDEX:
+        chunk_texts = []
+        for row_idx, answer in enumerate(df["answer"].fillna("").tolist()):
+            pieces = chunk_text(
+                normalize_arabic(answer),
+                token_len,
+                max_tokens=CHUNK_MAX_TOKENS,
+                overlap_tokens=CHUNK_OVERLAP,
+            )
+            if not pieces:
+                # Terse or empty answer: fall back to the question so every
+                # fatwa still owns at least one chunk and stays reachable.
+                pieces = [questions[row_idx] or " "]
+            for piece in pieces:
+                chunk_texts.append(piece)
+                chunk_parent.append(row_idx)
+        answer_emb = _encode(model, chunk_texts, "answer chunks")
+    else:
+        print("Skipping answer index (BUILD_ANSWER_INDEX=0).", flush=True)
+        answer_emb = np.zeros((0, question_emb.shape[1]), dtype=np.float16)
 
     np.save(INDEX_DIR / "question_emb.npy", question_emb)
     np.save(INDEX_DIR / "answer_emb.npy", answer_emb)
@@ -99,6 +116,7 @@ def main():
                 "n_fatwas": int(len(question_emb)),
                 "n_chunks": int(len(answer_emb)),
                 "dtype": "float16",
+                "has_answer_index": bool(BUILD_ANSWER_INDEX),
             },
             ensure_ascii=False,
             indent=2,
