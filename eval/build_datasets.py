@@ -26,10 +26,16 @@ META = Path("data/index/fatwas_meta.parquet")
 OUT = Path("eval/datasets/golden.jsonl")
 SEED = 20260808
 
+# Written against the POST-normalization forms. normalize_arabic folds أ/إ/آ/ٱ
+# to ا but leaves ؤ and ئ alone, so "يسأل" becomes "يسال" while "السؤال" and
+# "السائل" keep their hamza — both spellings must be listed.
 _LEAD = re.compile(
-    r"^(?:يقول|تقول|يسال|تسال|السوال|سوال|احسن الله اليكم|بارك الله فيكم|"
-    r"فضيلة الشيخ|سماحة الشيخ|هذا السائل يقول|هذه السائلة تقول|"
-    r"المقدم|الشيخ|جزاكم الله خيرا|وفقكم الله)\s*[:،.]?\s*"
+    r"^(?:يقول|تقول|يسال|تسال|يسأل|السؤال|السوال|سؤال|سوال|"
+    r"احسن الله اليكم|بارك الله فيكم|جزاكم الله خيرا|وفقكم الله|"
+    r"فضيلة الشيخ|سماحة الشيخ|"
+    r"هذا السائل يقول|هذه السائلة تقول|السائل يقول|السائلة تقول|"
+    r"السائل|السائلة|المستمع|المستمعة|"
+    r"المقدم|الشيخ)\s*[:،.]?\s*"
 )
 
 

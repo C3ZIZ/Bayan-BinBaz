@@ -8,6 +8,7 @@ import argparse
 import json
 from pathlib import Path
 
+from app import retrieval as retrieval_module
 from app.retrieval import get_retriever
 from eval.metrics import aggregate
 
@@ -62,7 +63,9 @@ def run(dataset: Path, top_k: int, tag: str):
             {
                 "dataset": str(dataset),
                 "top_k": top_k,
-                "alpha": __import__("app.retrieval", fromlist=["ALPHA"]).ALPHA,
+                "alpha": retrieval_module.ALPHA,
+                "hybrid": retrieval_module.USE_HYBRID,
+                "mmr": retrieval_module.USE_MMR,
                 "overall": overall,
                 "by_kind": by_kind,
             },
