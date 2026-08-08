@@ -16,16 +16,18 @@ misattribution, the worst failure this system can commit.
 """
 
 import os
+
 from functools import lru_cache
 from typing import Any, Dict, Iterator, List, Optional
 
 from huggingface_hub import InferenceClient
 
 from .textutil import truncate_at_sentence
+from .env import env_bool, env_float, env_int, env_opt, env_str
 
-MAX_ANSWER_CHARS = int(os.getenv("LLM_CONTEXT_CHARS", "1400"))
-MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "900"))
-TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
+MAX_ANSWER_CHARS = env_int("LLM_CONTEXT_CHARS", 1400)
+MAX_TOKENS = env_int("LLM_MAX_TOKENS", 900)
+TEMPERATURE = env_float("LLM_TEMPERATURE", 0.1)
 
 # Which LLM serves requests:
 #   "api"   — Hugging Face Inference only. Best quality, metered; a depleted
@@ -42,21 +44,21 @@ TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
 # LLM_BACKEND=api if you would rather fail fast than fall back.
 #
 # See app/llm_local.py for the benchmark behind the default local model.
-LLM_BACKEND = os.getenv("LLM_BACKEND", "both").strip().lower()
+LLM_BACKEND = env_str("LLM_BACKEND", "both").strip().lower()
 
 # The local model may run the GATE (it scored 5/5 there) but must not write a
 # ruling: measured, it fabricated "praying Isha as 5 rakʿahs is permissible"
 # from a fatwa about voluntary prayer, complete with valid citations.
-LOCAL_ALLOW_RULINGS = os.getenv("LOCAL_ALLOW_RULINGS", "0") == "1"
+LOCAL_ALLOW_RULINGS = env_bool("LOCAL_ALLOW_RULINGS", False)
 
 _USE_API = LLM_BACKEND in ("api", "both")
 _USE_LOCAL = LLM_BACKEND in ("local", "both")
 _FALLBACK = LLM_BACKEND == "both"
 
-LLM_API_MODEL = os.getenv("LLM_API_MODEL", "Qwen/Qwen2.5-72B-Instruct")
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto")
-LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "120"))
-HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN")
+LLM_API_MODEL = env_str("LLM_API_MODEL", "Qwen/Qwen2.5-72B-Instruct")
+LLM_PROVIDER = env_str("LLM_PROVIDER", "auto")
+LLM_TIMEOUT = env_float("LLM_TIMEOUT", 120)
+HF_TOKEN = env_opt("HF_TOKEN") or env_opt("HUGGINGFACEHUB_API_TOKEN")
 
 DISCLAIMER = (
     "هذا الجواب آلي مبني على فتاوى الشيخ ابن باز، ولا يغني عن سؤال أهل العلم مباشرة."

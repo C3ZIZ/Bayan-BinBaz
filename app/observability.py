@@ -12,12 +12,14 @@ Logging is opt-in via QUERY_LOG_PATH.
 
 import json
 import os
+
 import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from .env import env_bool, env_float, env_int, env_opt, env_str
 
-QUERY_LOG_PATH = os.getenv("QUERY_LOG_PATH", "")
+QUERY_LOG_PATH = env_str("QUERY_LOG_PATH", "")
 
 _lock = threading.Lock()
 

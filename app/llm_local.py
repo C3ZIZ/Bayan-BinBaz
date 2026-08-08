@@ -25,25 +25,27 @@ generation; it reloads on the next question.
 """
 
 import os
+
 import threading
 from typing import Any, Dict, Iterator, List, Optional
+from .env import env_bool, env_float, env_int, env_opt, env_str
 
-LOCAL_LLM_REPO = os.getenv("LOCAL_LLM_REPO", "tiiuae/Falcon-H1-3B-Instruct-GGUF")
-LOCAL_LLM_FILE = os.getenv("LOCAL_LLM_FILE", "Falcon-H1-3B-Instruct-Q4_K_M.gguf")
-LOCAL_LLM_CTX = int(os.getenv("LOCAL_LLM_CTX", "4096"))
-LOCAL_LLM_THREADS = int(os.getenv("LOCAL_LLM_THREADS", str(os.cpu_count() or 4)))
+LOCAL_LLM_REPO = env_str("LOCAL_LLM_REPO", "tiiuae/Falcon-H1-3B-Instruct-GGUF")
+LOCAL_LLM_FILE = env_str("LOCAL_LLM_FILE", "Falcon-H1-3B-Instruct-Q4_K_M.gguf")
+LOCAL_LLM_CTX = env_int("LOCAL_LLM_CTX", 4096)
+LOCAL_LLM_THREADS = env_int("LOCAL_LLM_THREADS", os.cpu_count() or 4)
 
 # CPU generation is slow and PREFILL dominates: measured in Docker, the same
 # model runs ~4 tok/s on a short prompt but ~1.2 tok/s once ~1600 tokens of
 # fatwa text are prepended. So the local path gets a tighter prompt and a
 # smaller answer budget than the hosted model — an answer that arrives is worth
 # more than a longer one that times out.
-LOCAL_CONTEXT_CHARS = int(os.getenv("LOCAL_CONTEXT_CHARS", "450"))
-LOCAL_MAX_SOURCES = int(os.getenv("LOCAL_MAX_SOURCES", "3"))
-LOCAL_MAX_TOKENS = int(os.getenv("LOCAL_MAX_TOKENS", "350"))
+LOCAL_CONTEXT_CHARS = env_int("LOCAL_CONTEXT_CHARS", 450)
+LOCAL_MAX_SOURCES = env_int("LOCAL_MAX_SOURCES", 3)
+LOCAL_MAX_TOKENS = env_int("LOCAL_MAX_TOKENS", 350)
 # Free the embedder before generating. Needed on ~4GB hosts where the embedder
 # and the LLM cannot both be resident.
-UNLOAD_EMBEDDER = os.getenv("LOCAL_UNLOAD_EMBEDDER", "0") == "1"
+UNLOAD_EMBEDDER = env_bool("LOCAL_UNLOAD_EMBEDDER", False)
 
 _llm = None
 _lock = threading.Lock()
@@ -55,7 +57,7 @@ def _resolve_model_path() -> str:
     Weight downloads are free — only the Inference API is metered — so this
     works even when the hosted quota is exhausted.
     """
-    explicit = os.getenv("LOCAL_LLM_PATH")
+    explicit = env_opt("LOCAL_LLM_PATH")
     if explicit:
         if not os.path.exists(explicit):
             raise FileNotFoundError(f"LOCAL_LLM_PATH does not exist: {explicit}")

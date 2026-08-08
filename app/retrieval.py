@@ -2,6 +2,7 @@ import ctypes
 import gc
 import json
 import os
+
 import platform
 import threading
 import time
@@ -13,6 +14,7 @@ import pandas as pd
 
 from .fusion import mmr_select, reciprocal_rank_fusion
 from .normalize import normalize_arabic
+from .env import env_bool, env_float, env_int, env_opt, env_str
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from FlagEmbedding import BGEM3FlagModel
@@ -32,24 +34,24 @@ META_PATH = INDEX_DIR / "fatwas_meta.parquet"
 MANIFEST_PATH = INDEX_DIR / "index_manifest.json"
 
 # Embedding model config (overridable via env for CPU/GPU tuning).
-EMB_MODEL_NAME = os.getenv("EMB_MODEL_NAME", "BAAI/bge-m3")
+EMB_MODEL_NAME = env_str("EMB_MODEL_NAME", "BAAI/bge-m3")
 # fp16 helps on GPU but is slow/unstable on CPU-only hosts — keep it off by default.
-EMB_USE_FP16 = os.getenv("EMB_USE_FP16", "0") == "1"
+EMB_USE_FP16 = env_bool("EMB_USE_FP16", False)
 
 # Weight on question-to-question similarity. The previous single-vector index was
 # 81% answer text while users send short questions, which compressed a perfect
 # self-match to a median cosine of 0.815. Tuned by eval/run_retrieval_eval.py.
-ALPHA = float(os.getenv("RETRIEVAL_ALPHA", "0.65"))
+ALPHA = env_float("RETRIEVAL_ALPHA", 0.65)
 
 # Hybrid retrieval: fuse dense and BM25 rankings via RRF, then diversify with
 # MMR. All switchable so eval/run_retrieval_eval.py can A/B each piece.
-USE_HYBRID = os.getenv("RETRIEVAL_HYBRID", "1") == "1"
-USE_MMR = os.getenv("RETRIEVAL_MMR", "1") == "1"
-CANDIDATE_DEPTH = int(os.getenv("RETRIEVAL_DEPTH", "50"))
-MMR_POOL = int(os.getenv("RETRIEVAL_MMR_POOL", "25"))
-MMR_LAMBDA = float(os.getenv("RETRIEVAL_MMR_LAMBDA", "0.7"))
-DENSE_WEIGHT = float(os.getenv("RETRIEVAL_DENSE_WEIGHT", "1.0"))
-LEXICAL_WEIGHT = float(os.getenv("RETRIEVAL_LEXICAL_WEIGHT", "0.6"))
+USE_HYBRID = env_bool("RETRIEVAL_HYBRID", True)
+USE_MMR = env_bool("RETRIEVAL_MMR", True)
+CANDIDATE_DEPTH = env_int("RETRIEVAL_DEPTH", 50)
+MMR_POOL = env_int("RETRIEVAL_MMR_POOL", 25)
+MMR_LAMBDA = env_float("RETRIEVAL_MMR_LAMBDA", 0.7)
+DENSE_WEIGHT = env_float("RETRIEVAL_DENSE_WEIGHT", 1.0)
+LEXICAL_WEIGHT = env_float("RETRIEVAL_LEXICAL_WEIGHT", 0.6)
 
 
 def _malloc_trim() -> None:

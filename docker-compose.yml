@@ -11,34 +11,105 @@ services:
     # publishes the port to the host so http://<host>:${PORT:-8000} works.
     expose:
       - "8000"
+
+    # Every default below mirrors the code's own default (see .env.example for
+    # what each one means). Override any of them in .env.
     environment:
-      # ---- LLM via Hugging Face Inference API (HF_TOKEN is REQUIRED) ----
-      HF_TOKEN: ${HF_TOKEN:?HF_TOKEN is required — set it in .env (see .env.example)}
+      # ---- LLM backend: api | local | both ------------------------------------
+      # "both" (the default) tries the hosted API first and falls back to a local
+      # GGUF model when it fails — 402 out of credits, 429, timeout, outage.
+      LLM_BACKEND: ${LLM_BACKEND:-both}
+
+      # HF_TOKEN is OPTIONAL, not required: with LLM_BACKEND=both the app still
+      # answers via the local model without it. (It was previously declared with
+      # `:?`, which aborted `docker compose up` when unset.) Set it anyway —
+      # hosted answers are substantially better.
+      HF_TOKEN: ${HF_TOKEN:-}
       LLM_API_MODEL: ${LLM_API_MODEL:-Qwen/Qwen2.5-72B-Instruct}
       LLM_PROVIDER: ${LLM_PROVIDER:-auto}
-      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-900}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
       LLM_TIMEOUT: ${LLM_TIMEOUT:-120}
-      LLM_CONTEXT_CHARS: ${LLM_CONTEXT_CHARS:-800}
-      LLM_MAX_HITS: ${LLM_MAX_HITS:-3}
-      # ---- Embeddings (BGE-M3, local) ----
+      LLM_CONTEXT_CHARS: ${LLM_CONTEXT_CHARS:-1400}
+
+      # ---- Local GGUF model (used when LLM_BACKEND is local or both) ----------
+      # Weights land in HF_HOME (/models), which is a named volume, so they
+      # download once. Model downloads are free — only Inference is metered.
+      LOCAL_LLM_REPO: ${LOCAL_LLM_REPO:-tiiuae/Falcon-H1-3B-Instruct-GGUF}
+      LOCAL_LLM_FILE: ${LOCAL_LLM_FILE:-Falcon-H1-3B-Instruct-Q4_K_M.gguf}
+      LOCAL_LLM_PATH: ${LOCAL_LLM_PATH:-}
+      LOCAL_LLM_CTX: ${LOCAL_LLM_CTX:-4096}
+      LOCAL_LLM_THREADS: ${LOCAL_LLM_THREADS:-}
+      # The local model runs the gate but does NOT write rulings: measured, the
+      # 3B model produced a fabricated ruling on an obligatory prayer while
+      # citing real fatwas. Set 1 only if you accept that.
+      LOCAL_ALLOW_RULINGS: ${LOCAL_ALLOW_RULINGS:-0}
+      # CPU generation is prefill-dominated (~4 tok/s short prompt vs ~1.2 tok/s
+      # with fatwa context), so the local path sends a smaller prompt.
+      LOCAL_CONTEXT_CHARS: ${LOCAL_CONTEXT_CHARS:-450}
+      LOCAL_MAX_SOURCES: ${LOCAL_MAX_SOURCES:-3}
+      LOCAL_MAX_TOKENS: ${LOCAL_MAX_TOKENS:-350}
+      # Set 1 on a ~4GB host: the local model (~1.9GB) and BGE-M3 (~2.3GB) do
+      # not both fit. Costs an embedder reload (~7s) on the next question.
+      LOCAL_UNLOAD_EMBEDDER: ${LOCAL_UNLOAD_EMBEDDER:-0}
+
+      # ---- Answerability gate -------------------------------------------------
+      GATE_MODEL: ${GATE_MODEL:-}
+      GATE_MAX_TOKENS: ${GATE_MAX_TOKENS:-400}
+      GATE_TEMPERATURE: ${GATE_TEMPERATURE:-0.0}
+      GATE_SNIPPET_CHARS: ${GATE_SNIPPET_CHARS:-600}
+
+      # ---- Embeddings (BGE-M3, local) ----------------------------------------
       EMB_MODEL_NAME: ${EMB_MODEL_NAME:-BAAI/bge-m3}
       EMB_USE_FP16: ${EMB_USE_FP16:-0}
-      # ---- Idle RAM release ----
+
+      # ---- Retrieval tuning ---------------------------------------------------
+      RETRIEVAL_ALPHA: ${RETRIEVAL_ALPHA:-0.65}
+      RETRIEVAL_HYBRID: ${RETRIEVAL_HYBRID:-1}
+      RETRIEVAL_MMR: ${RETRIEVAL_MMR:-1}
+      RETRIEVAL_MMR_LAMBDA: ${RETRIEVAL_MMR_LAMBDA:-0.7}
+      RETRIEVAL_MMR_POOL: ${RETRIEVAL_MMR_POOL:-25}
+      RETRIEVAL_DEPTH: ${RETRIEVAL_DEPTH:-50}
+      RETRIEVAL_DENSE_WEIGHT: ${RETRIEVAL_DENSE_WEIGHT:-1.0}
+      RETRIEVAL_LEXICAL_WEIGHT: ${RETRIEVAL_LEXICAL_WEIGHT:-0.6}
+
+      # ---- Abuse protection ---------------------------------------------------
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-20}
+      RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-60}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      # Behind Coolify/nginx set this to 1 so rate limiting keys on the real
+      # client. Leave 0 when directly exposed: X-Forwarded-For is client-supplied
+      # and rotating it would hand out a fresh quota window every request.
+      TRUST_PROXY_HEADER: ${TRUST_PROXY_HEADER:-0}
+
+      # ---- Idle RAM release ---------------------------------------------------
       MODEL_IDLE_TIMEOUT: ${MODEL_IDLE_TIMEOUT:-600}
       MODEL_IDLE_CHECK_INTERVAL: ${MODEL_IDLE_CHECK_INTERVAL:-60}
-      # ---- Runtime ----
+
+      # ---- Observability (optional) -------------------------------------------
+      # JSONL log of question + verdict + latency, no client identity. Point it
+      # inside /models (a volume) so it survives restarts.
+      QUERY_LOG_PATH: ${QUERY_LOG_PATH:-}
+
+      # ---- Runtime ------------------------------------------------------------
       HF_HOME: /models
       OMP_NUM_THREADS: ${OMP_NUM_THREADS:-4}
+
     volumes:
-      # Persists BGE-M3 (~2.3GB) so it downloads only once, not on every restart.
+      # Persists BGE-M3 (~2.3GB) AND the local GGUF (~1.9GB) so they download
+      # only once, not on every restart.
       - bayan-models:/models
     restart: unless-stopped
-    # Cap at 4GB: BGE-M3 (~2.3GB while active) + overhead. Freed when idle.
-    # Lower/remove this if your VPS has less; the app frees RAM when idle anyway.
-    mem_limit: 4g
+
+    # Default 6GB because with LLM_BACKEND=both BOTH models can be resident:
+    # BGE-M3 (~2.3GB) + the local GGUF (~1.9GB) + overhead exceeds the old 4GB
+    # cap and the container would be OOM-killed or thrash.
+    # On a 4GB VPS set MEM_LIMIT=4g AND LOCAL_UNLOAD_EMBEDDER=1.
+    mem_limit: ${MEM_LIMIT:-6g}
+
     healthcheck:
-      # /health does NOT load models, so it comes up within seconds.
+      # /health does NOT load models, so it comes up within seconds. It also
+      # reports which backend is active.
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
       interval: 30s
       timeout: 5s

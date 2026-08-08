@@ -25,16 +25,20 @@ reinstate the original bug precisely when the system is under stress.
 
 import json
 import os
+
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from .textutil import truncate_at_sentence
+from .env import env_bool, env_float, env_int, env_opt, env_str
 
-GATE_MODEL = os.getenv("GATE_MODEL", os.getenv("LLM_API_MODEL", "Qwen/Qwen2.5-72B-Instruct"))
-GATE_MAX_TOKENS = int(os.getenv("GATE_MAX_TOKENS", "400"))
-GATE_TEMPERATURE = float(os.getenv("GATE_TEMPERATURE", "0.0"))
-GATE_SNIPPET_CHARS = int(os.getenv("GATE_SNIPPET_CHARS", "600"))
+GATE_MODEL = env_str(
+    "GATE_MODEL", env_str("LLM_API_MODEL", "Qwen/Qwen2.5-72B-Instruct")
+)
+GATE_MAX_TOKENS = env_int("GATE_MAX_TOKENS", 400)
+GATE_TEMPERATURE = env_float("GATE_TEMPERATURE", 0.0)
+GATE_SNIPPET_CHARS = env_int("GATE_SNIPPET_CHARS", 600)
 
 VERDICTS = ("direct", "derived", "abstain")
 
